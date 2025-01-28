@@ -1,0 +1,9 @@
+---
+source: crates/oxc_linter/src/tester.rs
+---
+  ⚠ eslint(no-unneeded-ternary): Should be an imperative statement about what is wrong
+   ╭─[no_unneeded_ternary.tsx:1:9]
+ 1 │ var a = x === 2 ? true : false;
+   ·         ──────────────────────
+   ╰────
+  help: Should be a command-like statement that tells the user how to fix the issue
