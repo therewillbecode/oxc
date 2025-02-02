@@ -110,13 +110,10 @@ fn apply_fix<'a>(
     fixer: RuleFixer<'_, 'a>,
     ctx: &LintContext<'a>,
 ) -> RuleFix<'a> {
-    print!("aaaaaaaaaaa");
     println!("{:?}", node.test);
 
     match (&node.test, issue) {
-        (Expression::Identifier(_), _) => {
-            print!("bbbbb");
-            print!("bbbb");
+        (Expression::Identifier(_), UnneededTernary::TrueFalse) => {
             //  Replace `a ? true : false` with `!!a`.
             let mut formatter = fixer.codegen();
             formatter.print_str("!!");
@@ -130,25 +127,27 @@ fn apply_fix<'a>(
         //    print!("ccccc");
         //    print!("ccccc");
         //    match &assign_expr.right {
-        (Expression::BinaryExpression(binary_expr), _) => match binary_expr.operator {
-            // `var a = 1 == 2 ? false : true`
-            BinaryOperator::StrictEquality => {
-                //  Replace  `var a = 1 != 2`
-                let mut formatter = fixer.codegen();
-                formatter.print_str("!==");
+        (Expression::BinaryExpression(binary_expr), UnneededTernary::FalseTrue) => {
+            match binary_expr.operator {
+                // `var a = 1 == 2 ? false : true`
+                BinaryOperator::StrictEquality => {
+                    //  Replace  `var a = 1 != 2`
+                    let mut formatter = fixer.codegen();
+                    formatter.print_str("!==");
 
-                //formatter.print_expression();
-                let s: String = formatter.into_source_text();
-                let span: Span = Span::new(binary_expr.span.start, node.span.end);
-                fixer.replace(span, s)
+                    //formatter.print_expression();
+                    let s: String = formatter.into_source_text();
+                    let span: Span = Span::new(binary_expr.span.start, node.span.end);
+                    fixer.replace(span, s)
+                }
+                _ => {
+                    print!("dddd");
+                    print!("dddd");
+                    //  Replace `test ? true : false` with just `test`.
+                    fixer.replace_with(node, &node.test)
+                }
             }
-            _ => {
-                print!("dddd");
-                print!("dddd");
-                //  Replace `test ? true : false` with just `test`.
-                fixer.replace_with(node, &node.test)
-            }
-        },
+        }
         //      _ => {
         //          print!("dddd");
         //          print!("dddd");
@@ -208,9 +207,9 @@ fn test() {
     ];
 
     let fail = vec![
-        //  ("var a = x === 2 ? true : false;", None),
-        //  ("var a = x >= 2 ? true : false;", None),
-        //  ("var a = x ? true : false;", None),
+        ("var a = x === 2 ? true : false;", None),
+        ("var a = x >= 2 ? true : false;", None),
+        ("var a = x ? true : false;", None),
         ("var a = x === 1 ? false : true;", None),
         // ("var a = x != 1 ? false : true;", None),
         // ("var a = foo() ? false : true;", None),
@@ -261,9 +260,9 @@ fn test() {
     ];
 
     let fix = vec![
-        // ("var a = x === 2 ? true : false;", "var a = x === 2;", None),
-        // ("var a = x >= 2 ? true : false;", "var a = x >= 2;", None),
-        // ("var a = x ? true : false;", "var a = !!x;", None),
+        ("var a = x === 2 ? true : false;", "var a = x === 2;", None),
+        ("var a = x >= 2 ? true : false;", "var a = x >= 2;", None),
+        ("var a = x ? true : false;", "var a = !!x;", None),
         ("var a = x === 1 ? false : true;", "var a = x !== 1;", None),
         //   ("var a = x != 1 ? false : true;", "var a = x == 1;", None),
         //   ("var a = foo() ? false : true;", "var a = !foo();", None),
