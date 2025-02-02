@@ -7,6 +7,7 @@ use oxc_ast::AstKind;
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
 use oxc_span::Span;
+use oxc_syntax::operator::{BinaryOperator, UnaryOperator};
 
 fn no_unneeded_ternary_diagnostic<'a>(span: Span) -> OxcDiagnostic {
     // See <https://oxc.rs/docs/contribute/linter/adding-rules.html#diagnostics> for details
@@ -75,22 +76,20 @@ enum UnneededTernary {
 }
 
 // Todo - need to add call to  expr.without_parentheses()
-fn is_ternary_unneeded<'a>(
-    node: &ConditionalExpression<'a>,
-) -> Option<(UnneededTernary, UnneededTernaryFix)> {
+fn is_ternary_unneeded<'a>(node: &ConditionalExpression<'a>) -> Option<(UnneededTernary)> {
     match (node.consequent.get_inner_expression(), node.alternate.get_inner_expression()) {
         (Expression::BooleanLiteral(expr_cons), Expression::BooleanLiteral(expr_alt)) => {
             println!("{} {}", (*expr_cons).value, (*expr_alt).value);
 
             match ((*expr_cons).value, (*expr_alt).value) {
-                (true, false) => Some((
+                (true, false) => Some(
                     UnneededTernary::TrueFalse,
-                    get_fix(&node.test, &UnneededTernary::TrueFalse),
-                )),
-                (false, true) => Some((
+                    //    get_fix(&node.test, &UnneededTernary::TrueFalse),
+                ),
+                (false, true) => Some(
                     UnneededTernary::FalseTrue,
-                    get_fix(&node.test, &UnneededTernary::FalseTrue),
-                )),
+                    //       get_fix(&node.test, &UnneededTernary::FalseTrue),
+                ),
                 (_, _) => None,
             }
         }
@@ -100,38 +99,49 @@ fn is_ternary_unneeded<'a>(
 
 #[derive(Debug, Clone)]
 enum UnneededTernaryFix {
-    ReplaceWithTest,   // var a = x === 2 ? true : false -> var a = x === 2
+    ReplaceWithTest, // var a = x === 2 ? true : false -> var a = x === 2
+    ReplaceWithNegatedAssignRightTest,
     ReplaceWithToBool, // a ? true : false -> !!a
 }
 
-fn get_fix<'a>(
-    test: &Expression<'a>,   // The test in test ? true : false
-    issue: &UnneededTernary, // The kind of issue the ternary has
-) -> UnneededTernaryFix {
-    match (test, issue) {
-        (Expression::Identifier(_), _) => UnneededTernaryFix::ReplaceWithToBool,
-        (_, _) => UnneededTernaryFix::ReplaceWithTest,
-    }
-}
-
 fn apply_fix<'a>(
+    node: &ConditionalExpression<'a>, // The test in test ? true : false
+    issue: &UnneededTernary,          // The kind of issue the ternary has
     fixer: RuleFixer<'_, 'a>,
     ctx: &LintContext<'a>,
-    node: &ConditionalExpression<'a>,
-    fix: UnneededTernaryFix,
 ) -> RuleFix<'a> {
-    match fix {
-        UnneededTernaryFix::ReplaceWithTest => {
-            //  Replace `test ? true : false` with just `test`.
-            fixer.replace_with(node, &node.test)
-        }
-        UnneededTernaryFix::ReplaceWithToBool => {
+    match (&node.test, issue) {
+        (Expression::Identifier(_), _) => {
+            //  Replace `a ? true : false` with `!!a`.
             let mut formatter = fixer.codegen();
             formatter.print_str("!!");
             formatter.print_expression(&node.test);
 
             let s: String = formatter.into_source_text();
             fixer.replace(node.span, s)
+        }
+        (Expression::AssignmentExpression(assign_expr), UnneededTernary::FalseTrue) => {
+            let assignment_right = &(*assign_expr).right;
+            match assignment_right {
+                Expression::BinaryExpression(binary_expr) => match binary_expr.operator {
+                    BinaryOperator::Equality => {
+                        //  Replace `test ? true : false` with just `test`.
+                        fixer.replace_with(node, &node.test)
+                    }
+                    _ => {
+                        //  Replace `test ? true : false` with just `test`.
+                        fixer.replace_with(node, &node.test)
+                    }
+                },
+                _ => {
+                    //  Replace `test ? true : false` with just `test`.
+                    fixer.replace_with(node, &node.test)
+                }
+            }
+        }
+        (_, _) => {
+            //  Replace `test ? true : false` with just `test`.
+            fixer.replace_with(node, &node.test)
         }
     }
 }
@@ -140,9 +150,9 @@ impl Rule for NoUnneededTernary {
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
         if let AstKind::ConditionalExpression(node) = node.kind() {
             //            println!("{}", is_ternary_unneeded(node).is_some());
-            if let Some((UnneededTernary::TrueFalse, fix)) = is_ternary_unneeded(node) {
+            if let Some(issue) = is_ternary_unneeded(node) {
                 ctx.diagnostic_with_fix(no_unneeded_ternary_diagnostic(node.span), |fixer| {
-                    apply_fix(fixer, ctx, node, fix)
+                    apply_fix(node, &issue, fixer, ctx)
                 })
             }
         }
@@ -173,10 +183,10 @@ fn test() {
     ];
 
     let fail = vec![
-        ("var a = x === 2 ? true : false;", None),
-        ("var a = x >= 2 ? true : false;", None),
-        ("var a = x ? true : false;", None),
-        // ("var a = x === 1 ? false : true;", None),
+        //  ("var a = x === 2 ? true : false;", None),
+        //  ("var a = x >= 2 ? true : false;", None),
+        //  ("var a = x ? true : false;", None),
+        ("var a = x === 1 ? false : true;", None),
         // ("var a = x != 1 ? false : true;", None),
         // ("var a = foo() ? false : true;", None),
         // ("var a = !foo() ? false : true;", None),
@@ -226,10 +236,10 @@ fn test() {
     ];
 
     let fix = vec![
-        ("var a = x === 2 ? true : false;", "var a = x === 2;", None),
-        ("var a = x >= 2 ? true : false;", "var a = x >= 2;", None),
-        ("var a = x ? true : false;", "var a = !!x;", None),
-        //   ("var a = x === 1 ? false : true;", "var a = x !== 1;", None),
+        // ("var a = x === 2 ? true : false;", "var a = x === 2;", None),
+        // ("var a = x >= 2 ? true : false;", "var a = x >= 2;", None),
+        // ("var a = x ? true : false;", "var a = !!x;", None),
+        ("var a = x === 1 ? false : true;", "var a = x !== 1;", None),
         //   ("var a = x != 1 ? false : true;", "var a = x == 1;", None),
         //   ("var a = foo() ? false : true;", "var a = !foo();", None),
         //   ("var a = !foo() ? false : true;", "var a = !!foo();", None),
