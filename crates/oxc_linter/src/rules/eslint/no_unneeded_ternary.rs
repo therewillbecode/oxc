@@ -120,13 +120,20 @@ fn apply_fix<'a>(
             let s: String = formatter.into_source_text();
             fixer.replace(node.span, s)
         }
+        // `var a = 1 binary_op 2 ? false : true`
         (Expression::AssignmentExpression(assign_expr), UnneededTernary::FalseTrue) => {
-            let assignment_right = &(*assign_expr).right;
-            match assignment_right {
+            match &assign_expr.right {
                 Expression::BinaryExpression(binary_expr) => match binary_expr.operator {
+                    // `var a = 1 == 2 ? false : true`
                     BinaryOperator::Equality => {
-                        //  Replace `test ? true : false` with just `test`.
-                        fixer.replace_with(node, &node.test)
+                        //  Replace  `var a = 1 != 2`
+                        let mut formatter = fixer.codegen();
+                        formatter.print_str("!=");
+
+                        //formatter.print_expression();
+                        let s: String = formatter.into_source_text();
+                        let span: Span = Span::new(binary_expr.span.start, node.span.end);
+                        fixer.replace(span, s)
                     }
                     _ => {
                         //  Replace `test ? true : false` with just `test`.
