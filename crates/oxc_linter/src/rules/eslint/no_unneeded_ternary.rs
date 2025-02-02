@@ -110,8 +110,13 @@ fn apply_fix<'a>(
     fixer: RuleFixer<'_, 'a>,
     ctx: &LintContext<'a>,
 ) -> RuleFix<'a> {
+    print!("aaaaaaaaaaa");
+    println!("{:?}", node.test);
+
     match (&node.test, issue) {
         (Expression::Identifier(_), _) => {
+            print!("bbbbb");
+            print!("bbbb");
             //  Replace `a ? true : false` with `!!a`.
             let mut formatter = fixer.codegen();
             formatter.print_str("!!");
@@ -121,31 +126,44 @@ fn apply_fix<'a>(
             fixer.replace(node.span, s)
         }
         // `var a = 1 binary_op 2 ? false : true`
-        (Expression::AssignmentExpression(assign_expr), UnneededTernary::FalseTrue) => {
-            match &assign_expr.right {
-                Expression::BinaryExpression(binary_expr) => match binary_expr.operator {
-                    // `var a = 1 == 2 ? false : true`
-                    BinaryOperator::Equality => {
-                        //  Replace  `var a = 1 != 2`
-                        let mut formatter = fixer.codegen();
-                        formatter.print_str("!=");
+        //(Expression::AssignmentExpression(assign_expr), UnneededTernary::FalseTrue) => {
+        //    print!("ccccc");
+        //    print!("ccccc");
+        //    match &assign_expr.right {
+        (Expression::BinaryExpression(binary_expr), _) => match binary_expr.operator {
+            // `var a = 1 == 2 ? false : true`
+            BinaryOperator::StrictEquality => {
+                //  Replace  `var a = 1 != 2`
+                let mut formatter = fixer.codegen();
+                formatter.print_str("!==");
 
-                        //formatter.print_expression();
-                        let s: String = formatter.into_source_text();
-                        let span: Span = Span::new(binary_expr.span.start, node.span.end);
-                        fixer.replace(span, s)
-                    }
-                    _ => {
-                        //  Replace `test ? true : false` with just `test`.
-                        fixer.replace_with(node, &node.test)
-                    }
-                },
-                _ => {
-                    //  Replace `test ? true : false` with just `test`.
-                    fixer.replace_with(node, &node.test)
-                }
+                //formatter.print_expression();
+                let s: String = formatter.into_source_text();
+                let span: Span = Span::new(binary_expr.span.start, node.span.end);
+                fixer.replace(span, s)
             }
-        }
+            _ => {
+                print!("dddd");
+                print!("dddd");
+                //  Replace `test ? true : false` with just `test`.
+                fixer.replace_with(node, &node.test)
+            }
+        },
+        //      _ => {
+        //          print!("dddd");
+        //          print!("dddd");
+        //          //  Replace `test ? true : false` with just `test`.
+        //          fixer.replace_with(node, &node.test)
+        //      }
+        //  },
+        //       _ => {
+        //           print!("eeee");
+        //           print!("eeee");
+        //           //  Replace `test ? true : false` with just `test`.
+        //           fixer.replace_with(node, &node.test)
+        //       }
+        //}
+        //}
         (_, _) => {
             //  Replace `test ? true : false` with just `test`.
             fixer.replace_with(node, &node.test)
