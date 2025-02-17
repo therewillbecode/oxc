@@ -4,6 +4,81 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.51.0] - 2025-02-15
+
+### Features
+
+- 36c8640 ecmascript: Support more string concatenation (#9121) (sapphi-red)
+- 6936b08 ecmascript: Fold `typeof` with ValueType information (#9086) (sapphi-red)
+- 125d610 minifier: Fold String::charAt / String::charCodeAt more precisely (#9082) (sapphi-red)
+- 237ffba minifier: Fold bitwise binary expressions with negative BigInts (#9081) (sapphi-red)
+
+### Bug Fixes
+
+- eb7cd62 ecmascript: To_number for shadowed undefined (#9106) (sapphi-red)
+- 8cbdf00 ecmascript: To_boolean for shadowed undefined (#9105) (sapphi-red)
+- 17c745c ecmascript: To_string for object with toString (#9104) (sapphi-red)
+- cfc71f9 ecmascript: To_string for shadowed undefined (#9103) (sapphi-red)
+- 2ab2a8f ecmascript: Handle shadowed global variables in `ValueType` (#9085) (sapphi-red)
+
+### Refactor
+
+- 8bd6eef ecmascript: Merge constant evaluation logics (#9120) (sapphi-red)
+- b164072 ecmascript: Extract to_numeric (#9111) (sapphi-red)
+- fc53cdd ecmascript: Generalize ToPrimitive (#9109) (sapphi-red)
+- d951390 ecmascript: Use value_type in to_primitive (#9108) (sapphi-red)
+- 8f79012 ecmascript: Pass IsGlobalReference to DetermineValueType instead of extending it (#9107) (sapphi-red)
+- db1744c ecmascript: Remove "constant_evaluation" / "side_effects" features (#9114) (sapphi-red)
+- 329de94 ecmascript: Extract ToPrimitive (#9102) (sapphi-red)
+- d670ec7 ecmascript: Pass IsGlobalReference to MayHaveSideEffects instead of extending it (#9101) (sapphi-red)
+- f4e2d4e ecmascript: Allow IsGlobalReference to return None (#9100) (sapphi-red)
+
+## [0.49.0] - 2025-02-10
+
+### Features
+
+- ad1a878 ecmascript: Support BigInt comparison (#9014) (sapphi-red)
+- d515cfd ecmascript: Detect objects without overridden `toString`/`valueOf`/`Symbol.toPrimitive` (#8993) (sapphi-red)
+- 2a10a99 ecmascript: Support arrays and objects for unary expression may_have_side_effects (#8990) (sapphi-red)
+- dd383c0 ecmascript: `ValueType::from` for PrivateInExpression (#8964) (sapphi-red)
+- c3eef2f ecmascript: `ValueType::from` for parenthesized expressions (#8962) (sapphi-red)
+- 2c3a46d ecmascript: Support more simple expressions by `ValueType::from` (#8961) (sapphi-red)
+- 4cec83f ecmascript: `ValueType::from` for bitwise not operator (#8955) (sapphi-red)
+- e3e9999 ecmascript: Complete may_have_side_effects (#8855) (sapphi-red)
+- ca4831b minifier: Fold `typeof class {}` to `'function'` (#8949) (sapphi-red)
+- 9ffe9e9 minifier: Fold `typeof (() => {})` to `'function'` (#8948) (sapphi-red)
+- 36007de minifier: Fold typeof `{ foo }` when `foo` is declared (#8947) (sapphi-red)
+- 56575b2 minifier: Fold complicated array literals passed to unary `+` (#8944) (sapphi-red)
+- 14462be minifier: Fold simple literals passed to unary `+` (#8943) (sapphi-red)
+- d6d13dd minifier: Minimize `!!(boolean_expr)` -> `boolean_expr` (#8849) (Boshen)
+
+### Bug Fixes
+
+- 9a5a926 ecmascript: Fix may_have_side_effects for binary expressions (#8991) (sapphi-red)
+- 660c314 ecmascript: Fix may_have_side_effects for unary expressions (#8989) (sapphi-red)
+- 8ab7204 ecmascript: Fix `ValueType::from` for `AssignmentExpression` (#8959) (sapphi-red)
+- aeb122d ecmascript: Fix `ValueType::from` for numeric binary operators (#8956) (sapphi-red)
+- 1182c20 ecmascript: `ValueType::from` for unknown value should return Undetermined instead of Number (#8954) (sapphi-red)
+- b5a7785 minifier: Fix comparison of strings with unicode characters (#8942) (sapphi-red)
+
+### Refactor
+
+- 9b5d800 minifier: Move equality comparison to ConstantEvaluation (#9009) (sapphi-red)
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
+### Testing
+
+- cc7bb9c ecmascript: Add test for `ValueType` and update document (#8951) (sapphi-red)
+
+## [0.48.2] - 2025-02-02
+
+### Bug Fixes
+
+- ae7f670 minifier: Avoid minifying `+void unknown` to `NaN` and fix typo (#8784) (7086cmd)
+
 ## [0.48.1] - 2025-01-26
 
 ### Refactor

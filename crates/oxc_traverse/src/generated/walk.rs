@@ -3776,15 +3776,11 @@ unsafe fn walk_ts_literal<'a, Tr: Traverse<'a>>(
         TSLiteral::BooleanLiteral(node) => {
             walk_boolean_literal(traverser, (&mut **node) as *mut _, ctx)
         }
-        TSLiteral::NullLiteral(node) => walk_null_literal(traverser, (&mut **node) as *mut _, ctx),
         TSLiteral::NumericLiteral(node) => {
             walk_numeric_literal(traverser, (&mut **node) as *mut _, ctx)
         }
         TSLiteral::BigIntLiteral(node) => {
             walk_big_int_literal(traverser, (&mut **node) as *mut _, ctx)
-        }
-        TSLiteral::RegExpLiteral(node) => {
-            walk_reg_exp_literal(traverser, (&mut **node) as *mut _, ctx)
         }
         TSLiteral::StringLiteral(node) => {
             walk_string_literal(traverser, (&mut **node) as *mut _, ctx)
@@ -3867,9 +3863,6 @@ unsafe fn walk_ts_type<'a, Tr: Traverse<'a>>(
         TSType::TSMappedType(node) => walk_ts_mapped_type(traverser, (&mut **node) as *mut _, ctx),
         TSType::TSNamedTupleMember(node) => {
             walk_ts_named_tuple_member(traverser, (&mut **node) as *mut _, ctx)
-        }
-        TSType::TSQualifiedName(node) => {
-            walk_ts_qualified_name(traverser, (&mut **node) as *mut _, ctx)
         }
         TSType::TSTemplateLiteralType(node) => {
             walk_ts_template_literal_type(traverser, (&mut **node) as *mut _, ctx)
@@ -4181,7 +4174,6 @@ unsafe fn walk_ts_tuple_element<'a, Tr: Traverse<'a>>(
         | TSTupleElement::TSLiteralType(_)
         | TSTupleElement::TSMappedType(_)
         | TSTupleElement::TSNamedTupleMember(_)
-        | TSTupleElement::TSQualifiedName(_)
         | TSTupleElement::TSTemplateLiteralType(_)
         | TSTupleElement::TSThisType(_)
         | TSTupleElement::TSTupleType(_)

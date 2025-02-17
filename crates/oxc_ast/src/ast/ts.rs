@@ -2,7 +2,7 @@
 //!
 //! - [AST Spec](https://github.com/typescript-eslint/typescript-eslint/tree/v8.9.0/packages/ast-spec)
 //! - [Archived TypeScript spec](https://github.com/microsoft/TypeScript/blob/3c99d50da5a579d9fa92d02664b1b66d4ff55944/doc/spec-ARCHIVED.md)
-#![allow(missing_docs)] // FIXME
+#![expect(missing_docs)] // FIXME
 
 // NB: `#[span]`, `#[scope(...)]`,`#[visit(...)]` and `#[generate_derive(...)]` do NOT do anything to the code.
 // They are purely markers for codegen used in `tasks/ast_tools` and `crates/oxc_traverse/scripts`. See docs in those crates.
@@ -13,7 +13,7 @@ use std::cell::Cell;
 use oxc_allocator::{Box, CloneIn, GetAddress, Vec};
 use oxc_ast_macros::ast;
 use oxc_estree::ESTree;
-use oxc_span::{cmp::ContentEq, Atom, GetSpan, GetSpanMut, Span};
+use oxc_span::{Atom, ContentEq, GetSpan, GetSpanMut, Span};
 use oxc_syntax::scope::ScopeId;
 
 use super::{inherit_variants, js::*, literal::*};
@@ -71,8 +71,6 @@ pub struct TSEnumDeclaration<'a> {
     /// `true` for const enums
     pub r#const: bool,
     pub declare: bool,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -161,13 +159,11 @@ pub struct TSLiteralType<'a> {
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, GetAddress, ContentEq, ESTree)]
 pub enum TSLiteral<'a> {
     BooleanLiteral(Box<'a, BooleanLiteral>) = 0,
-    NullLiteral(Box<'a, NullLiteral>) = 1,
-    NumericLiteral(Box<'a, NumericLiteral<'a>>) = 2,
-    BigIntLiteral(Box<'a, BigIntLiteral<'a>>) = 3,
-    RegExpLiteral(Box<'a, RegExpLiteral<'a>>) = 4,
-    StringLiteral(Box<'a, StringLiteral<'a>>) = 5,
-    TemplateLiteral(Box<'a, TemplateLiteral<'a>>) = 6,
-    UnaryExpression(Box<'a, UnaryExpression<'a>>) = 7,
+    NumericLiteral(Box<'a, NumericLiteral<'a>>) = 1,
+    BigIntLiteral(Box<'a, BigIntLiteral<'a>>) = 2,
+    StringLiteral(Box<'a, StringLiteral<'a>>) = 3,
+    TemplateLiteral(Box<'a, TemplateLiteral<'a>>) = 4,
+    UnaryExpression(Box<'a, UnaryExpression<'a>>) = 5,
 }
 
 /// TypeScript Type
@@ -211,7 +207,6 @@ pub enum TSType<'a> {
     TSLiteralType(Box<'a, TSLiteralType<'a>>) = 22,
     TSMappedType(Box<'a, TSMappedType<'a>>) = 23,
     TSNamedTupleMember(Box<'a, TSNamedTupleMember<'a>>) = 24,
-    TSQualifiedName(Box<'a, TSQualifiedName<'a>>) = 25,
     TSTemplateLiteralType(Box<'a, TSTemplateLiteralType<'a>>) = 26,
     TSThisType(Box<'a, TSThisType>) = 10,
     TSTupleType(Box<'a, TSTupleType<'a>>) = 27,
@@ -257,7 +252,6 @@ macro_rules! match_ts_type {
             | $ty::TSLiteralType(_)
             | $ty::TSMappedType(_)
             | $ty::TSNamedTupleMember(_)
-            | $ty::TSQualifiedName(_)
             | $ty::TSTemplateLiteralType(_)
             | $ty::TSTupleType(_)
             | $ty::TSTypeLiteral(_)
@@ -303,8 +297,6 @@ pub struct TSConditionalType<'a> {
     /// The type evaluated to if the test is false.
     #[scope(exit_before)]
     pub false_type: TSType<'a>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -836,8 +828,6 @@ pub struct TSTypeAliasDeclaration<'a> {
     pub type_parameters: Option<Box<'a, TSTypeParameterDeclaration<'a>>>,
     pub type_annotation: TSType<'a>,
     pub declare: bool,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -900,8 +890,6 @@ pub struct TSInterfaceDeclaration<'a> {
     pub body: Box<'a, TSInterfaceBody<'a>>,
     /// `true` for `declare interface Foo {}`
     pub declare: bool,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -981,6 +969,7 @@ pub struct TSCallSignatureDeclaration<'a> {
     pub span: Span,
     pub type_parameters: Option<Box<'a, TSTypeParameterDeclaration<'a>>>,
     pub this_param: Option<TSThisParameter<'a>>,
+    #[estree(ts_type = "ParamPattern[]")]
     pub params: Box<'a, FormalParameters<'a>>,
     pub return_type: Option<Box<'a, TSTypeAnnotation<'a>>>,
 }
@@ -1017,10 +1006,9 @@ pub struct TSMethodSignature<'a> {
     pub kind: TSMethodSignatureKind,
     pub type_parameters: Option<Box<'a, TSTypeParameterDeclaration<'a>>>,
     pub this_param: Option<Box<'a, TSThisParameter<'a>>>,
+    #[estree(ts_type = "ParamPattern[]")]
     pub params: Box<'a, FormalParameters<'a>>,
     pub return_type: Option<Box<'a, TSTypeAnnotation<'a>>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1032,17 +1020,16 @@ pub struct TSMethodSignature<'a> {
 pub struct TSConstructSignatureDeclaration<'a> {
     pub span: Span,
     pub type_parameters: Option<Box<'a, TSTypeParameterDeclaration<'a>>>,
+    #[estree(ts_type = "ParamPattern[]")]
     pub params: Box<'a, FormalParameters<'a>>,
     pub return_type: Option<Box<'a, TSTypeAnnotation<'a>>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(type = "Identifier")]
+#[estree(rename = "Identifier")]
 pub struct TSIndexSignatureName<'a> {
     pub span: Span,
     pub name: Atom<'a>,
@@ -1131,8 +1118,8 @@ pub enum TSTypePredicateName<'a> {
 /// * [TypeScript Handbook - Global Augmentation](https://www.typescriptlang.org/docs/handbook/declaration-merging.html#global-augmentation)
 #[ast(visit)]
 #[scope(
-    flags(ScopeFlags::TsModuleBlock),
-    strict_if(self.body.as_ref().is_some_and(TSModuleDeclarationBody::has_use_strict_directive)),
+    flags = ScopeFlags::TsModuleBlock,
+    strict_if = self.body.as_ref().is_some_and(TSModuleDeclarationBody::has_use_strict_directive),
 )]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
@@ -1159,8 +1146,6 @@ pub struct TSModuleDeclaration<'a> {
     /// ```
     pub kind: TSModuleDeclarationKind,
     pub declare: bool,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1216,11 +1201,11 @@ pub enum TSModuleDeclarationBody<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(custom_serialize)]
 pub struct TSModuleBlock<'a> {
     pub span: Span,
-    #[estree(skip)]
+    #[estree(rename = "body")]
     pub directives: Vec<'a, Directive<'a>>,
+    #[estree(append_to = "directives")]
     pub body: Vec<'a, Statement<'a>>,
 }
 
@@ -1313,6 +1298,8 @@ pub struct TSImportAttributes<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+// Pluralize as `TSImportAttributeList` to avoid naming clash with `TSImportAttributes`.
+#[plural(TSImportAttributeList)]
 pub struct TSImportAttribute<'a> {
     pub span: Span,
     pub name: TSImportAttributeName<'a>,
@@ -1355,6 +1342,7 @@ pub struct TSFunctionType<'a> {
     /// ```
     pub this_param: Option<Box<'a, TSThisParameter<'a>>>,
     /// Function parameters. Akin to [`Function::params`].
+    #[estree(ts_type = "ParamPattern[]")]
     pub params: Box<'a, FormalParameters<'a>>,
     /// Return type of the function.
     /// ```ts
@@ -1371,6 +1359,7 @@ pub struct TSConstructorType<'a> {
     pub span: Span,
     pub r#abstract: bool,
     pub type_parameters: Option<Box<'a, TSTypeParameterDeclaration<'a>>>,
+    #[estree(ts_type = "ParamPattern[]")]
     pub params: Box<'a, FormalParameters<'a>>,
     pub return_type: Box<'a, TSTypeAnnotation<'a>>,
 }
@@ -1430,8 +1419,6 @@ pub struct TSMappedType<'a> {
     /// type Qux = { [P in keyof T]: T[P] }           // None
     /// ```
     pub readonly: TSMappedTypeModifierOperator,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 

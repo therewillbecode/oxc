@@ -1,11 +1,12 @@
+use cow_utils::CowUtils;
 use std::borrow::Cow;
 
-use cow_utils::CowUtils;
-
+use oxc_allocator::IntoIn;
 use oxc_ast::ast::*;
 use oxc_ecmascript::{
-    constant_evaluation::{ConstantEvaluation, ValueType},
-    StringCharAt, StringCharCodeAt, StringIndexOf, StringLastIndexOf, StringSubstring, ToInt32,
+    constant_evaluation::{ConstantEvaluation, DetermineValueType},
+    StringCharAt, StringCharAtResult, StringCharCodeAt, StringIndexOf, StringLastIndexOf,
+    StringSubstring, ToInt32,
 };
 use oxc_span::SPAN;
 use oxc_syntax::es_target::ESTarget;
@@ -26,11 +27,11 @@ impl<'a> PeepholeOptimizations {
         ctx: Ctx<'a, '_>,
     ) {
         self.try_fold_concat_chain(node, ctx);
-        self.try_fold_known_string_methods(node, ctx);
+        self.try_fold_known_global_methods(node, ctx);
         self.try_fold_known_property_access(node, ctx);
     }
 
-    fn try_fold_known_string_methods(&mut self, node: &mut Expression<'a>, ctx: Ctx<'a, '_>) {
+    fn try_fold_known_global_methods(&mut self, node: &mut Expression<'a>, ctx: Ctx<'a, '_>) {
         let Expression::CallExpression(ce) = node else { return };
         let CallExpression { span, callee, arguments, .. } = ce.as_mut();
         let (name, object) = match &callee {
@@ -57,7 +58,7 @@ impl<'a> PeepholeOptimizations {
             }
             "charAt" => Self::try_fold_string_char_at(*span, arguments, object, ctx),
             "charCodeAt" => Self::try_fold_string_char_code_at(*span, arguments, object, ctx),
-            "concat" => Self::try_fold_concat(*span, arguments, callee, ctx),
+            "concat" => self.try_fold_concat(*span, arguments, callee, ctx),
             "replace" | "replaceAll" => {
                 Self::try_fold_string_replace(*span, arguments, name, object, ctx)
             }
@@ -65,6 +66,11 @@ impl<'a> PeepholeOptimizations {
             "toString" => Self::try_fold_to_string(*span, arguments, object, ctx),
             "pow" => self.try_fold_pow(*span, arguments, object, ctx),
             "sqrt" | "cbrt" => Self::try_fold_roots(*span, arguments, name, object, ctx),
+            "abs" | "ceil" | "floor" | "round" | "fround" | "trunc" | "sign" => {
+                Self::try_fold_math_unary(*span, arguments, name, object, ctx)
+            }
+            "min" | "max" => Self::try_fold_math_variadic(*span, arguments, name, object, ctx),
+            "of" => Self::try_fold_array_of(*span, arguments, name, object, ctx),
             _ => None,
         };
         if let Some(replacement) = replacement {
@@ -135,11 +141,11 @@ impl<'a> PeepholeOptimizations {
         let Expression::StringLiteral(s) = object else { return None };
         let start_idx = args.first().and_then(|arg| match arg {
             Argument::SpreadElement(_) => None,
-            _ => ctx.get_side_free_number_value(arg.to_expression()),
+            _ => arg.to_expression().get_side_free_number_value(&ctx),
         });
         let end_idx = args.get(1).and_then(|arg| match arg {
             Argument::SpreadElement(_) => None,
-            _ => ctx.get_side_free_number_value(arg.to_expression()),
+            _ => arg.to_expression().get_side_free_number_value(&ctx),
         });
         #[expect(clippy::cast_precision_loss)]
         if start_idx.is_some_and(|start| start > s.value.len() as f64 || start < 0.0)
@@ -169,21 +175,18 @@ impl<'a> PeepholeOptimizations {
             return None;
         }
         let Expression::StringLiteral(s) = object else { return None };
-        let char_at_index: Option<f64> = match args.first() {
-            Some(Argument::NumericLiteral(numeric_lit)) => Some(numeric_lit.value),
-            Some(Argument::UnaryExpression(unary_expr))
-                if unary_expr.operator == UnaryOperator::UnaryNegation =>
-            {
-                let Expression::NumericLiteral(numeric_lit) = &unary_expr.argument else {
-                    return None;
-                };
-                Some(-(numeric_lit.value))
+        let char_at_index = match args.first() {
+            Some(Argument::SpreadElement(_)) => return None,
+            Some(arg @ match_expression!(Argument)) => {
+                Some(arg.to_expression().get_side_free_number_value(&ctx)?)
             }
             None => None,
-            _ => return None,
         };
-        let result =
-            &s.value.as_str().char_at(char_at_index).map_or(String::new(), |v| v.to_string());
+        let result = match s.value.as_str().char_at(char_at_index) {
+            StringCharAtResult::Value(c) => &c.to_string(),
+            StringCharAtResult::InvalidChar(_) => return None,
+            StringCharAtResult::OutOfRange => "",
+        };
         Some(ctx.ast.expression_string_literal(span, result, None))
     }
 
@@ -196,17 +199,13 @@ impl<'a> PeepholeOptimizations {
     ) -> Option<Expression<'a>> {
         let Expression::StringLiteral(s) = object else { return None };
         let char_at_index = match args.first() {
-            None => Some(0.0),
-            Some(Argument::SpreadElement(_)) => None,
-            Some(e) => ctx.get_side_free_number_value(e.to_expression()),
-        }?;
-        let value = if (0.0..65536.0).contains(&char_at_index) {
-            s.value.as_str().char_code_at(Some(char_at_index))? as f64
-        } else if char_at_index.is_nan() || char_at_index.is_infinite() {
-            return None;
-        } else {
-            f64::NAN
+            Some(Argument::SpreadElement(_)) => return None,
+            Some(arg @ match_expression!(Argument)) => {
+                Some(arg.to_expression().get_side_free_number_value(&ctx)?)
+            }
+            None => None,
         };
+        let value = s.value.as_str().char_code_at(char_at_index).map_or(f64::NAN, |n| n as f64);
         Some(ctx.ast.expression_numeric_literal(span, value, None, NumberBase::Decimal))
     }
 
@@ -225,14 +224,14 @@ impl<'a> PeepholeOptimizations {
         let search_value = match search_value {
             Argument::SpreadElement(_) => return None,
             match_expression!(Argument) => {
-                ctx.get_side_free_string_value(search_value.to_expression())?
+                search_value.to_expression().evaluate_value(&ctx)?.into_string()?
             }
         };
         let replace_value = args.get(1).unwrap();
         let replace_value = match replace_value {
             Argument::SpreadElement(_) => return None,
             match_expression!(Argument) => {
-                ctx.get_side_free_string_value(replace_value.to_expression())?
+                replace_value.to_expression().get_side_free_string_value(&ctx)?
             }
         };
         if replace_value.contains('$') {
@@ -260,7 +259,7 @@ impl<'a> PeepholeOptimizations {
         let mut s = String::with_capacity(args.len());
         for arg in args {
             let expr = arg.as_expression()?;
-            let v = ctx.get_side_free_number_value(expr)?;
+            let v = expr.get_side_free_number_value(&ctx)?;
             let v = v.to_int_32() as u16 as u32;
             let c = char::try_from(v).ok()?;
             s.push(c);
@@ -328,7 +327,7 @@ impl<'a> PeepholeOptimizations {
                 if args.is_empty() =>
             {
                 use oxc_ecmascript::ToJsString;
-                object.to_js_string().map(|s| ctx.ast.expression_string_literal(span, s, None))
+                object.to_js_string(&ctx).map(|s| ctx.ast.expression_string_literal(span, s, None))
             }
             _ => None,
         }
@@ -348,6 +347,15 @@ impl<'a> PeepholeOptimizations {
         result.into_iter().rev().collect()
     }
 
+    fn validate_global_reference(expr: &Expression<'a>, target: &str, ctx: Ctx<'a, '_>) -> bool {
+        let Expression::Identifier(ident) = expr else { return false };
+        ctx.is_global_reference(ident) && ident.name == target
+    }
+
+    fn validate_arguments(args: &Arguments, expected_len: usize) -> bool {
+        (args.len() == expected_len) && args.iter().all(Argument::is_expression)
+    }
+
     /// `Math.pow(a, b)` -> `+(a) ** +b`
     fn try_fold_pow(
         &self,
@@ -359,12 +367,9 @@ impl<'a> PeepholeOptimizations {
         if self.target < ESTarget::ES2016 {
             return None;
         }
-
-        let Expression::Identifier(ident) = object else { return None };
-        if ident.name != "Math" || !ctx.is_global_reference(ident) {
-            return None;
-        }
-        if arguments.len() != 2 || arguments.iter().any(|arg| !arg.is_expression()) {
+        if !Self::validate_global_reference(object, "Math", ctx)
+            || !Self::validate_arguments(arguments, 2)
+        {
             return None;
         }
 
@@ -374,7 +379,7 @@ impl<'a> PeepholeOptimizations {
         let first_arg = first_arg.to_expression_mut(); // checked above
 
         let wrap_with_unary_plus_if_needed = |expr: &mut Expression<'a>| {
-            if ValueType::from(&*expr).is_number() {
+            if expr.value_type(&ctx).is_number() {
                 ctx.ast.move_expression(expr)
             } else {
                 ctx.ast.expression_unary(
@@ -387,7 +392,8 @@ impl<'a> PeepholeOptimizations {
 
         Some(ctx.ast.expression_binary(
             span,
-            wrap_with_unary_plus_if_needed(first_arg),
+            // see [`PeepholeOptimizations::is_binary_operator_that_does_number_conversion`] why it does not require `wrap_with_unary_plus_if_needed` here
+            ctx.ast.move_expression(first_arg),
             BinaryOperator::Exponential,
             wrap_with_unary_plus_if_needed(second_arg),
         ))
@@ -404,14 +410,12 @@ impl<'a> PeepholeOptimizations {
         object: &Expression<'a>,
         ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
-        let Expression::Identifier(ident) = object else { return None };
-        if ident.name != "Math" || !ctx.is_global_reference(ident) {
+        if !Self::validate_global_reference(object, "Math", ctx)
+            || !Self::validate_arguments(arguments, 1)
+        {
             return None;
         }
-        if arguments.len() != 1 || !arguments[0].is_expression() {
-            return None;
-        }
-        let arg_val = ctx.get_side_free_number_value(arguments[0].to_expression())?;
+        let arg_val = arguments[0].to_expression().get_side_free_number_value(&ctx)?;
         if arg_val == f64::INFINITY || arg_val.is_nan() || arg_val == 0.0 {
             return Some(ctx.ast.expression_numeric_literal(
                 span,
@@ -433,15 +437,94 @@ impl<'a> PeepholeOptimizations {
             "cbrt" => arg_val.cbrt(),
             _ => unreachable!(),
         };
-        if calculated_val.fract() == 0.0 {
-            return Some(ctx.ast.expression_numeric_literal(
-                span,
-                calculated_val,
-                None,
-                NumberBase::Decimal,
-            ));
+        (calculated_val.fract() == 0.0).then(|| {
+            ctx.ast.expression_numeric_literal(span, calculated_val, None, NumberBase::Decimal)
+        })
+    }
+
+    fn try_fold_math_unary(
+        span: Span,
+        arguments: &Arguments,
+        name: &str,
+        object: &Expression<'a>,
+        ctx: Ctx<'a, '_>,
+    ) -> Option<Expression<'a>> {
+        if !Self::validate_global_reference(object, "Math", ctx)
+            || !Self::validate_arguments(arguments, 1)
+        {
+            return None;
         }
-        None
+        let arg_val = arguments[0].to_expression().get_side_free_number_value(&ctx)?;
+        let result = match name {
+            "abs" => arg_val.abs(),
+            "ceil" => arg_val.ceil(),
+            "floor" => arg_val.floor(),
+            "round" => {
+                // We should be aware that the behavior in JavaScript and Rust towards `round` is different.
+                // In Rust, when facing `.5`, it may follow `half-away-from-zero` instead of round to upper bound.
+                // So we need to handle it manually.
+                let frac_part = arg_val.fract();
+                let epsilon = 2f64.powf(-52f64);
+                if (frac_part.abs() - 0.5).abs() < epsilon {
+                    // We should ceil it.
+                    arg_val.ceil()
+                } else {
+                    arg_val.round()
+                }
+            }
+            #[expect(clippy::cast_possible_truncation)]
+            "fround" if arg_val.fract() == 0f64 || arg_val.is_nan() || arg_val.is_infinite() => {
+                f64::from(arg_val as f32)
+            }
+            "fround" => return None,
+            "trunc" => arg_val.trunc(),
+            "sign" if arg_val.to_bits() == 0f64.to_bits() => 0f64,
+            "sign" if arg_val.to_bits() == (-0f64).to_bits() => -0f64,
+            "sign" => arg_val.signum(),
+            _ => unreachable!(),
+        };
+        // These results are always shorter to return as a number, so we can just return them as NumericLiteral.
+        Some(ctx.ast.expression_numeric_literal(span, result, None, NumberBase::Decimal))
+    }
+
+    fn try_fold_math_variadic(
+        span: Span,
+        arguments: &Arguments,
+        name: &str,
+        object: &Expression<'a>,
+        ctx: Ctx<'a, '_>,
+    ) -> Option<Expression<'a>> {
+        if !Self::validate_global_reference(object, "Math", ctx) {
+            return None;
+        }
+        let numbers = arguments
+            .iter()
+            .map(|arg| arg.as_expression().map(|e| e.get_side_free_number_value(&ctx))?)
+            .collect::<Option<Vec<_>>>()?;
+        let result = if numbers.iter().any(|n| n.is_nan()) {
+            f64::NAN
+        } else {
+            match name {
+                // TODO
+                // see <https://github.com/rust-lang/rust/issues/83984>, we can't use `min` and `max` here due to inconsistency
+                "min" => numbers.iter().copied().fold(f64::INFINITY, |a, b| {
+                    if a < b || ((a == 0f64) && (b == 0f64) && (a.to_bits() > b.to_bits())) {
+                        a
+                    } else {
+                        b
+                    }
+                }),
+                "max" => numbers.iter().copied().fold(f64::NEG_INFINITY, |a, b| {
+                    if a > b || ((a == 0f64) && (b == 0f64) && (a.to_bits() < b.to_bits())) {
+                        a
+                    } else {
+                        b
+                    }
+                }),
+                _ => return None,
+            }
+        };
+        Some(ctx.ast.expression_numeric_literal(span, result, None, NumberBase::Decimal))
     }
 
     /// `[].concat(a).concat(b)` -> `[].concat(a, b)`
@@ -526,7 +609,9 @@ impl<'a> PeepholeOptimizations {
     }
 
     /// `[].concat(1, 2)` -> `[1, 2]`
+    /// `"".concat(a, "b")` -> "`${a}b`"
     fn try_fold_concat(
+        &self,
         span: Span,
         args: &mut Arguments<'a>,
         callee: &mut Expression<'a>,
@@ -544,51 +629,134 @@ impl<'a> PeepholeOptimizations {
             Expression::ComputedMemberExpression(member) => &mut member.object,
             _ => unreachable!(),
         };
-        let Expression::ArrayExpression(array_expr) = object else { return None };
+        match object {
+            Expression::ArrayExpression(array_expr) => {
+                let can_merge_until = args
+                    .iter()
+                    .enumerate()
+                    .take_while(|(_, argument)| match argument {
+                        Argument::SpreadElement(_) => false,
+                        match_expression!(Argument) => {
+                            let argument = argument.to_expression();
+                            if argument.is_literal() {
+                                true
+                            } else {
+                                matches!(argument, Expression::ArrayExpression(_))
+                            }
+                        }
+                    })
+                    .map(|(i, _)| i)
+                    .last();
 
-        let can_merge_until = args
-            .iter()
-            .enumerate()
-            .take_while(|(_, argument)| match argument {
-                Argument::SpreadElement(_) => false,
-                match_expression!(Argument) => {
-                    let argument = argument.to_expression();
-                    if argument.is_literal() {
-                        true
-                    } else {
-                        matches!(argument, Expression::ArrayExpression(_))
+                if let Some(can_merge_until) = can_merge_until {
+                    for argument in args.drain(..=can_merge_until) {
+                        let argument = argument.into_expression();
+                        if argument.is_literal() {
+                            array_expr.elements.push(ArrayExpressionElement::from(argument));
+                        } else {
+                            let Expression::ArrayExpression(mut argument_array) = argument else {
+                                unreachable!()
+                            };
+                            array_expr.elements.append(&mut argument_array.elements);
+                        }
                     }
                 }
-            })
-            .map(|(i, _)| i)
-            .last();
 
-        if let Some(can_merge_until) = can_merge_until {
-            for argument in args.drain(..=can_merge_until) {
-                let argument = argument.into_expression();
-                if argument.is_literal() {
-                    array_expr.elements.push(ArrayExpressionElement::from(argument));
+                if args.is_empty() {
+                    Some(ctx.ast.move_expression(object))
+                } else if can_merge_until.is_some() {
+                    Some(ctx.ast.expression_call(
+                        span,
+                        ctx.ast.move_expression(callee),
+                        Option::<TSTypeParameterInstantiation>::None,
+                        ctx.ast.move_vec(args),
+                        false,
+                    ))
                 } else {
-                    let Expression::ArrayExpression(mut argument_array) = argument else {
-                        unreachable!()
-                    };
-                    array_expr.elements.append(&mut argument_array.elements);
+                    None
                 }
             }
-        }
+            Expression::StringLiteral(base_str) => {
+                if self.target < ESTarget::ES2015
+                    || args.is_empty()
+                    || !args.iter().all(Argument::is_expression)
+                {
+                    return None;
+                }
 
-        if args.is_empty() {
-            Some(ctx.ast.move_expression(object))
-        } else if can_merge_until.is_some() {
-            Some(ctx.ast.expression_call(
-                span,
-                ctx.ast.move_expression(callee),
-                Option::<TSTypeParameterInstantiation>::None,
-                ctx.ast.move_vec(args),
-                false,
-            ))
-        } else {
-            None
+                let expression_count =
+                    args.iter().filter(|arg| !matches!(arg, Argument::StringLiteral(_))).count();
+                let string_count = args.len() - expression_count;
+
+                // whether it is shorter to use `String::concat`
+                if ".concat()".len() + args.len() + "''".len() * string_count
+                    < "${}".len() * expression_count
+                {
+                    return None;
+                }
+
+                let mut quasi_strs: Vec<Cow<'a, str>> =
+                    vec![Cow::Borrowed(base_str.value.as_str())];
+                let mut expressions = ctx.ast.vec();
+                let mut pushed_quasi = true;
+                for argument in args.drain(..) {
+                    if let Argument::StringLiteral(str_lit) = argument {
+                        if pushed_quasi {
+                            let last_quasi = quasi_strs
+                                .last_mut()
+                                .expect("last element should exist because pushed_quasi is true");
+                            last_quasi.to_mut().push_str(&str_lit.value);
+                        } else {
+                            quasi_strs.push(Cow::Borrowed(str_lit.value.as_str()));
+                        }
+                        pushed_quasi = true;
+                    } else {
+                        if !pushed_quasi {
+                            // need a pair
+                            quasi_strs.push(Cow::Borrowed(""));
+                        }
+                        // checked that all the arguments are expression above
+                        expressions.push(argument.into_expression());
+                        pushed_quasi = false;
+                    }
+                }
+                if !pushed_quasi {
+                    quasi_strs.push(Cow::Borrowed(""));
+                }
+
+                if expressions.is_empty() {
+                    debug_assert_eq!(quasi_strs.len(), 1);
+                    return Some(ctx.ast.expression_string_literal(
+                        span,
+                        quasi_strs.pop().unwrap(),
+                        None,
+                    ));
+                }
+
+                let mut quasis = ctx.ast.vec_from_iter(quasi_strs.into_iter().map(|s| {
+                    let cooked = s.clone().into_in(ctx.ast.allocator);
+                    ctx.ast.template_element(
+                        SPAN,
+                        false,
+                        TemplateElementValue {
+                            raw: s
+                                .cow_replace("\\", "\\\\")
+                                .cow_replace("`", "\\`")
+                                .cow_replace("${", "\\${")
+                                .cow_replace("\r\n", "\\r\n")
+                                .into_in(ctx.ast.allocator),
+                            cooked: Some(cooked),
+                        },
+                    )
+                }));
+                if let Some(last_quasi) = quasis.last_mut() {
+                    last_quasi.tail = true;
+                }
+
+                debug_assert_eq!(quasis.len(), expressions.len() + 1);
+                Some(ctx.ast.expression_template_literal(span, quasis, expressions))
+            }
+            _ => None,
         }
     }
 
@@ -652,7 +820,6 @@ impl<'a> PeepholeOptimizations {
             "NEGATIVE_INFINITY" => num(span, f64::NEG_INFINITY),
             "NaN" => num(span, f64::NAN),
             "MAX_SAFE_INTEGER" => {
-                #[allow(clippy::cast_precision_loss)]
                 if self.target < ESTarget::ES2016 {
                     num(span, 2.0f64.powf(53.0) - 1.0)
                 } else {
@@ -661,7 +828,6 @@ impl<'a> PeepholeOptimizations {
                 }
             }
             "MIN_SAFE_INTEGER" => {
-                #[allow(clippy::cast_precision_loss)]
                 if self.target < ESTarget::ES2016 {
                     num(span, -(2.0f64.powf(53.0) - 1.0))
                 } else {
@@ -688,6 +854,26 @@ impl<'a> PeepholeOptimizations {
             _ => return None,
         })
     }
+
+    fn try_fold_array_of(
+        span: Span,
+        arguments: &mut Arguments<'a>,
+        name: &str,
+        object: &Expression<'a>,
+        ctx: Ctx<'a, '_>,
+    ) -> Option<Expression<'a>> {
+        if !Self::validate_global_reference(object, "Array", ctx) {
+            return None;
+        }
+        if name != "of" {
+            return None;
+        }
+        Some(ctx.ast.expression_array(
+            span,
+            ctx.ast.vec_from_iter(arguments.drain(..).map(ArrayExpressionElement::from)),
+            None,
+        ))
+    }
 }
 
 /// Port from: <https://github.com/google/closure-compiler/blob/v20240609/test/com/google/javascript/jscomp/PeepholeReplaceKnownMethodsTest.java>
@@ -703,6 +889,14 @@ mod test {
     fn test_es2015(code: &str, expected: &str) {
         let opts = CompressOptions { target: ESTarget::ES2015, ..CompressOptions::default() };
         assert_eq!(run(code, Some(opts)), run(expected, None));
+    }
+
+    fn test_value(code: &str, expected: &str) {
+        test(format!("x = {code}").as_str(), format!("x = {expected}").as_str());
+    }
+
+    fn test_same_value(code: &str) {
+        test_same(format!("x = {code}").as_str());
     }
 
     #[test]
@@ -861,6 +1055,7 @@ mod test {
         test("x = 'ab'.replaceAll('','x')", "x = 'xaxbx'");
 
         test("x = 'c_c_c'.replaceAll('c','x')", "x = 'x_x_x'");
+        test("x = 'acaca'.replaceAll('c',/x/)", "x = 'a/x/a/x/a'");
 
         test_same("x = 'acaca'.replaceAll(/c/,'x')"); // this should throw
         test_same("x = 'acaca'.replaceAll(/c/g,'x')"); // this will affect the global RegExp props
@@ -922,12 +1117,13 @@ mod test {
         test("x = 'abcde'.charAt(5)", "x = ''");
         test("x = 'abcde'.charAt(-1)", "x = ''");
         test("x = 'abcde'.charAt()", "x = 'a'");
+        test_same("x = 'abcde'.charAt(...foo)");
         test_same("x = 'abcde'.charAt(0, ++z)");
         test_same("x = 'abcde'.charAt(y)");
-        test_same("x = 'abcde'.charAt(null)"); // or x = 'a'
-        test_same("x = 'abcde'.charAt(!0)"); // or x = 'b'
-                                             // test("x = '\\ud834\udd1e'.charAt(0)", "x = '\\ud834'");
-                                             // test("x = '\\ud834\udd1e'.charAt(1)", "x = '\\udd1e'");
+        test("x = 'abcde'.charAt(null)", "x = 'a'");
+        test("x = 'abcde'.charAt(!0)", "x = 'b'");
+        test_same("x = '\\ud834\\udd1e'.charAt(0)"); // or x = '\\ud834'
+        test_same("x = '\\ud834\\udd1e'.charAt(1)"); // or x = '\\udd1e'
 
         // Template strings
         test("x = `abcdef`.charAt(0)", "x = 'a'");
@@ -942,15 +1138,16 @@ mod test {
         test("x = 'abcde'.charCodeAt(2)", "x = 99");
         test("x = 'abcde'.charCodeAt(3)", "x = 100");
         test("x = 'abcde'.charCodeAt(4)", "x = 101");
-        test_same("x = 'abcde'.charCodeAt(5)");
+        test("x = 'abcde'.charCodeAt(5)", "x = NaN");
         test("x = 'abcde'.charCodeAt(-1)", "x = NaN");
+        test_same("x = 'abcde'.charCodeAt(...foo)");
         test_same("x = 'abcde'.charCodeAt(y)");
         test("x = 'abcde'.charCodeAt()", "x = 97");
         test("x = 'abcde'.charCodeAt(0, ++z)", "x = 97");
         test("x = 'abcde'.charCodeAt(null)", "x = 97");
         test("x = 'abcde'.charCodeAt(true)", "x = 98");
-        // test("x = '\\ud834\udd1e'.charCodeAt(0)", "x = 55348");
-        // test("x = '\\ud834\udd1e'.charCodeAt(1)", "x = 56606");
+        test("x = '\\ud834\\udd1e'.charCodeAt(0)", "x = 55348");
+        test("x = '\\ud834\\udd1e'.charCodeAt(1)", "x = 56606");
         test("x = `abcdef`.charCodeAt(0)", "x = 97");
         test_same("x = `abcdef ${abc}`.charCodeAt(0)");
     }
@@ -1108,99 +1305,106 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_abs() {
-        test_same("Math.abs(Math.random())");
+        test_same_value("Math.abs(Math.random())");
 
-        test("Math.abs('-1')", "1");
-        test("Math.abs(-2)", "2");
-        test("Math.abs(null)", "0");
-        test("Math.abs('')", "0");
-        test("Math.abs([])", "0");
-        test("Math.abs([2])", "2");
-        test("Math.abs([1,2])", "NaN");
-        test("Math.abs({})", "NaN");
-        test("Math.abs('string');", "NaN");
+        test_value("Math.abs('-1')", "1");
+        test_value("Math.abs(-2)", "2");
+        test_value("Math.abs(null)", "0");
+        test_value("Math.abs('')", "0");
+        test_value("Math.abs(NaN)", "NaN");
+        test_value("Math.abs(-0)", "0");
+        test_value("Math.abs(-Infinity)", "Infinity");
+        // TODO
+        // test_value("Math.abs([])", "0");
+        // test_value("Math.abs([2])", "2");
+        // test_value("Math.abs([1,2])", "NaN");
+        test_value("Math.abs({})", "NaN");
+        test_value("Math.abs('string');", "NaN");
     }
 
     #[test]
     #[ignore]
     fn test_fold_math_functions_imul() {
-        test_same("Math.imul(Math.random(),2)");
-        test("Math.imul(-1,1)", "-1");
-        test("Math.imul(2,2)", "4");
-        test("Math.imul(2)", "0");
-        test("Math.imul(2,3,5)", "6");
-        test("Math.imul(0xfffffffe, 5)", "-10");
-        test("Math.imul(0xffffffff, 5)", "-5");
-        test("Math.imul(0xfffffffffffff34f, 0xfffffffffff342)", "13369344");
-        test("Math.imul(0xfffffffffffff34f, -0xfffffffffff342)", "-13369344");
-        test("Math.imul(NaN, 2)", "0");
+        test_same_value("Math.imul(Math.random(),2)");
+        test_value("Math.imul(-1,1)", "-1");
+        test_value("Math.imul(2,2)", "4");
+        test_value("Math.imul(2)", "0");
+        test_value("Math.imul(2,3,5)", "6");
+        test_value("Math.imul(0xfffffffe, 5)", "-10");
+        test_value("Math.imul(0xffffffff, 5)", "-5");
+        test_value("Math.imul(0xfffffffffffff34f, 0xfffffffffff342)", "13369344");
+        test_value("Math.imul(0xfffffffffffff34f, -0xfffffffffff342)", "-13369344");
+        test_value("Math.imul(NaN, 2)", "0");
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_ceil() {
-        test_same("Math.ceil(Math.random())");
+        test_same_value("Math.ceil(Math.random())");
 
-        test("Math.ceil(1)", "1");
-        test("Math.ceil(1.5)", "2");
-        test("Math.ceil(1.3)", "2");
-        test("Math.ceil(-1.3)", "-1");
+        test_value("Math.ceil(1)", "1");
+        test_value("Math.ceil(1.5)", "2");
+        test_value("Math.ceil(1.3)", "2");
+        test_value("Math.ceil(-1.3)", "-1");
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_floor() {
-        test_same("Math.floor(Math.random())");
+        test_same_value("Math.floor(Math.random())");
 
-        test("Math.floor(1)", "1");
-        test("Math.floor(1.5)", "1");
-        test("Math.floor(1.3)", "1");
-        test("Math.floor(-1.3)", "-2");
+        test_value("Math.floor(1)", "1");
+        test_value("Math.floor(1.5)", "1");
+        test_value("Math.floor(1.3)", "1");
+        test_value("Math.floor(-1.3)", "-2");
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_fround() {
-        test_same("Math.fround(Math.random())");
+        test_same_value("Math.fround(Math.random())");
 
-        test("Math.fround(NaN)", "NaN");
-        test("Math.fround(Infinity)", "Infinity");
-        test("Math.fround(1)", "1");
-        test("Math.fround(0)", "0");
+        test_value("Math.fround(NaN)", "NaN");
+        test_value("Math.fround(Infinity)", "Infinity");
+        test_value("Math.fround(-Infinity)", "-Infinity");
+        test_value("Math.fround(1)", "1");
+        test_value("Math.fround(0)", "0");
+        test_value("Math.fround(16777217)", "16777216");
+        test_value("Math.fround(16777218)", "16777218");
     }
 
     #[test]
     fn test_fold_math_functions_fround_j2cl() {
-        test_same("Math.fround(1.2)");
+        test_same_value("Math.fround(1.2)");
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_round() {
-        test_same("Math.round(Math.random())");
-        test("Math.round(NaN)", "NaN");
-        test("Math.round(3.5)", "4");
-        test("Math.round(-3.5)", "-3");
+        test_same_value("Math.round(Math.random())");
+        test_value("Math.round(NaN)", "NaN");
+        test_value("Math.round(3)", "3");
+        test_value("Math.round(3.5)", "4");
+        test_value("Math.round(-3.5)", "-3");
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_sign() {
-        test_same("Math.sign(Math.random())");
-        test("Math.sign(NaN)", "NaN");
-        test("Math.sign(3.5)", "1");
-        test("Math.sign(-3.5)", "-1");
+        test_same_value("Math.sign(Math.random())");
+        test_value("Math.sign(NaN)", "NaN");
+        test_value("Math.sign(0.0)", "0");
+        test_value("Math.sign(-0.0)", "-0");
+        test_value("Math.sign(0.01)", "1");
+        test_value("Math.sign(-0.01)", "-1");
+        test_value("Math.sign(3.5)", "1");
+        test_value("Math.sign(-3.5)", "-1");
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_trunc() {
-        test_same("Math.trunc(Math.random())");
-        test("Math.sign(NaN)", "NaN");
-        test("Math.trunc(3.5)", "3");
-        test("Math.trunc(-3.5)", "-3");
+        test_same_value("Math.trunc(Math.random())");
+        test_value("Math.sign(NaN)", "NaN");
+        test_value("Math.trunc(3.5)", "3");
+        test_value("Math.trunc(-3.5)", "-3");
+        test_value("Math.trunc(0.5)", "0");
+        test_value("Math.trunc(-0.5)", "-0");
     }
 
     #[test]
@@ -1228,25 +1432,33 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_max() {
-        test_same("Math.max(Math.random(), 1)");
+        test_same_value("Math.max(Math.random(), 1)");
 
-        test("Math.max()", "-Infinity");
-        test("Math.max(0)", "0");
-        test("Math.max(0, 1)", "1");
-        test("Math.max(0, 1, -1, 200)", "200");
+        test_value("Math.max()", "-Infinity");
+        test_value("Math.max(0)", "0");
+        test_value("Math.max(0, 1)", "1");
+        test_value("Math.max(0, 1, -1, 200)", "200");
+        test_value("Math.max(0, -1, -Infinity)", "0");
+        test_value("Math.max(0, -1, -Infinity, NaN)", "NaN");
+        test_value("Math.max(0, -0)", "0");
+        test_value("Math.max(-0, 0)", "0");
+        test_same_value("Math.max(...a, 1)");
     }
 
     #[test]
-    #[ignore]
     fn test_fold_math_functions_min() {
-        test_same("Math.min(Math.random(), 1)");
+        test_same_value("Math.min(Math.random(), 1)");
 
-        test("Math.min()", "Infinity");
-        test("Math.min(3)", "3");
-        test("Math.min(0, 1)", "0");
-        test("Math.min(0, 1, -1, 200)", "-1");
+        test_value("Math.min()", "Infinity");
+        test_value("Math.min(3)", "3");
+        test_value("Math.min(0, 1)", "0");
+        test_value("Math.min(0, 1, -1, 200)", "-1");
+        test_value("Math.min(0, -1, -Infinity)", "-Infinity");
+        test_value("Math.min(0, -1, -Infinity, NaN)", "NaN");
+        test_value("Math.min(0, -0)", "-0");
+        test_value("Math.min(-0, 0)", "-0");
+        test_same_value("Math.min(...a, 1)");
     }
 
     #[test]
@@ -1430,17 +1642,18 @@ mod test {
         test("var x; [1].concat(x.a).concat(x)", "var x; [1].concat(x.a, x)"); // x.a might have a getter that updates x, but that side effect is preserved correctly
 
         // string
-        test("'1'.concat(1).concat(2,['abc']).concat('abc')", "'1'.concat(1,2,['abc'],'abc')");
-        test("''.concat(['abc']).concat(1).concat([2,3])", "''.concat(['abc'],1,[2,3])");
-        test_same("''.concat(1)");
+        test("x = '1'.concat(1).concat(2,['abc']).concat('abc')", "x = '112abcabc'");
+        test("x = ''.concat(['abc']).concat(1).concat([2,3])", "x = 'abc12,3'");
+        test("x = ''.concat(1)", "x = '1'");
 
-        test("var x, y; ''.concat(x).concat(y)", "var x, y; ''.concat(x, y)");
-        test("var y; ''.concat(x).concat(y)", "var y; ''.concat(x, y)"); // x might have a getter that updates y, but that side effect is preserved correctly
-        test("var x; ''.concat(x.a).concat(x)", "var x; ''.concat(x.a, x)"); // x.a might have a getter that updates x, but that side effect is preserved correctly
+        test("var x, y; v = ''.concat(x).concat(y)", "var x, y; v = `${x}${y}`");
+        test("var y; v = ''.concat(x).concat(y)", "var y; v = `${x}${y}`"); // x might have a getter that updates y, but that side effect is preserved correctly
+        test("var x; v = ''.concat(x.a).concat(x)", "var x; v = `${x.a}${x}`"); // x.a might have a getter that updates x, but that side effect is preserved correctly
 
         // other
         test("x = []['concat'](1)", "x = [1]");
-        test_same("obj.concat([1,2]).concat(1)");
+        test("x = ''['concat'](1)", "x = '1'");
+        test_same("x = obj.concat([1,2]).concat(1)");
     }
 
     #[test]
@@ -1465,17 +1678,16 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_array_of_spread() {
-        test("x = Array.of(...['a', 'b', 'c'])", "x = [...['a', 'b', 'c']]");
-        test("x = Array.of(...['a', 'b', 'c',])", "x = [...['a', 'b', 'c']]");
-        test("x = Array.of(...['a'], ...['b', 'c'])", "x = [...['a'], ...['b', 'c']]");
-        test("x = Array.of('a', ...['b', 'c'])", "x = ['a', ...['b', 'c']]");
-        test("x = Array.of('a', ...['b', 'c'])", "x = ['a', ...['b', 'c']]");
+        // Here, since our tests are fully opened, the dce may automatically optimize it into a simple array, instead of simply substitute the function call.
+        test("x = Array.of(...['a', 'b', 'c'])", "x = ['a', 'b', 'c']");
+        test("x = Array.of(...['a', 'b', 'c',])", "x = ['a', 'b', 'c']");
+        test("x = Array.of(...['a'], ...['b', 'c'])", "x = ['a', 'b', 'c']");
+        test("x = Array.of('a', ...['b', 'c'])", "x = ['a', 'b', 'c']");
+        test("x = Array.of('a', ...['b', 'c'])", "x = ['a', 'b', 'c']");
     }
 
     #[test]
-    #[ignore]
     fn test_array_of_no_spread() {
         test("x = Array.of('a', 'b', 'c')", "x = ['a', 'b', 'c']");
         test("x = Array.of('a', ['b', 'c'])", "x = ['a', ['b', 'c']]");
@@ -1483,13 +1695,11 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_array_of_no_args() {
         test("x = Array.of()", "x = []");
     }
 
     #[test]
-    #[ignore]
     fn test_array_of_no_change() {
         test_same("x = Array.of.apply(window, ['a', 'b', 'c'])");
         test_same("x = ['a', 'b', 'c']");
@@ -1497,7 +1707,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_fold_array_bug() {
         test_same("Array[123]()");
     }
@@ -1533,6 +1742,30 @@ mod test {
         test("x = String.fromCharCode('0.5')", "x = '\\0'");
 
         test_same("x = Unknown.fromCharCode('0.5')");
+    }
+
+    #[test]
+    fn test_fold_string_concat() {
+        test_same("x = ''.concat()");
+        test("x = ''.concat(a, b)", "x = `${a}${b}`");
+        test("x = ''.concat(a, b, c)", "x = `${a}${b}${c}`");
+        test("x = ''.concat(a, b, c, d)", "x = `${a}${b}${c}${d}`");
+        test_same("x = ''.concat(a, b, c, d, e)");
+        test("x = ''.concat('a')", "x = 'a'");
+        test("x = ''.concat('a', 'b')", "x = 'ab'");
+        test("x = ''.concat('a', 'b', 'c')", "x = 'abc'");
+        test("x = ''.concat('a', 'b', 'c', 'd')", "x = 'abcd'");
+        test("x = ''.concat('a', 'b', 'c', 'd', 'e')", "x = 'abcde'");
+        test("x = ''.concat(a, 'b')", "x = `${a}b`");
+        test("x = ''.concat('a', b)", "x = `a${b}`");
+        test("x = ''.concat(a, 'b', c)", "x = `${a}b${c}`");
+        test("x = ''.concat('a', b, 'c')", "x = `a${b}c`");
+        test("x = ''.concat('a', b, 'c', d, 'e', f, 'g', h, 'i', j, 'k', l, 'm', n, 'o', p, 'q', r, 's', t)", "x = `a${b}c${d}e${f}g${h}i${j}k${l}m${n}o${p}q${r}s${t}`");
+        test("x = ''.concat(a, 1)", "x = `${a}${1}`"); // inlining 1 is not implemented yet
+
+        test("x = '\\\\s'.concat(a)", "x = `\\\\s${a}`");
+        test("x = '`'.concat(a)", "x = `\\`${a}`");
+        test("x = '${'.concat(a)", "x = `\\${${a}`");
     }
 
     #[test]
@@ -1579,11 +1812,11 @@ mod test {
     #[test]
     fn test_fold_pow() {
         test("Math.pow(2, 3)", "2 ** 3");
-        test("Math.pow(a, 3)", "+(a) ** 3");
-        test("Math.pow(2, b)", "2 ** +b");
-        test("Math.pow(a, b)", "+(a) ** +b");
-        test("Math.pow(2n, 3n)", "+(2n) ** +3n"); // errors both before and after
-        test("Math.pow(a + b, c)", "+(a + b) ** +c");
+        test("Math.pow(a, 3)", "a ** 3");
+        test("Math.pow(2, b)", "2 ** b");
+        test("Math.pow(a, b)", "a ** +b");
+        test("Math.pow(2n, 3n)", "2n ** +3n"); // errors both before and after
+        test("Math.pow(a + b, c)", "(a + b) ** +c");
         test_same("Math.pow()");
         test_same("Math.pow(1)");
         test_same("Math.pow(...a, 1)");

@@ -1858,7 +1858,7 @@ impl<'a> ClassProperties<'a, '_> {
         private_field: ArenaBox<'a, PrivateInExpression<'a>>,
         ctx: &mut TraverseCtx<'a>,
     ) -> Expression<'a> {
-        let PrivateInExpression { left, right, span, .. } = private_field.unbox();
+        let PrivateInExpression { left, right, span } = private_field.unbox();
 
         let ResolvedPrivateProp { class_bindings, prop_binding, is_method, is_static, .. } =
             self.classes_stack.find_private_prop(&left);
@@ -2130,7 +2130,7 @@ impl<'a> ClassProperties<'a, '_> {
     /// * Setter: `_prop.call(_assertClassBrand(Class, object), value)`
     /// * Prop: `_privateFieldSet(_prop, object, value)`
     /// * Prop binding is `None`: `_writeOnlyError("#method")`
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn create_private_setter(
         &self,
         private_name: &str,

@@ -4,7 +4,7 @@ use std::{borrow::Cow, fmt};
 
 use oxc_allocator::CloneIn;
 use oxc_regular_expression::ast::Pattern;
-use oxc_span::cmp::ContentEq;
+use oxc_span::ContentEq;
 
 use crate::ast::*;
 
@@ -37,7 +37,7 @@ impl NumericLiteral<'_> {
     /// port from [closure compiler](https://github.com/google/closure-compiler/blob/a4c880032fba961f7a6c06ef99daa3641810bfdd/src/com/google/javascript/jscomp/base/JSCompDoubles.java#L113)
     ///
     /// <https://262.ecma-international.org/5.1/#sec-9.5>
-    #[allow(clippy::cast_possible_truncation)] // for `as i32`
+    #[expect(clippy::cast_possible_truncation)] // for `as i32`
     pub fn ecmascript_to_int32(num: f64) -> i32 {
         // Fast path for most common case. Also covers -0.0
         let int32_value = num as i32;
@@ -68,14 +68,6 @@ impl NumericLiteral<'_> {
             Some(raw) => Cow::Borrowed(raw),
             None => Cow::Owned(format!("{}", self.value)),
         }
-    }
-}
-
-impl ContentEq for NumericLiteral<'_> {
-    fn content_eq(&self, other: &Self) -> bool {
-        // Note: `f64::content_eq` uses `==` equality.
-        // `f64::NAN != f64::NAN` and `0.0 == -0.0`, so we follow the same here.
-        ContentEq::content_eq(&self.value, &other.value)
     }
 }
 
@@ -111,12 +103,6 @@ impl StringLiteral<'_> {
     }
 }
 
-impl ContentEq for StringLiteral<'_> {
-    fn content_eq(&self, other: &Self) -> bool {
-        ContentEq::content_eq(&self.value, &other.value)
-    }
-}
-
 impl AsRef<str> for StringLiteral<'_> {
     #[inline]
     fn as_ref(&self) -> &str {
@@ -136,23 +122,16 @@ impl BigIntLiteral<'_> {
     pub fn is_zero(&self) -> bool {
         self.raw == "0n"
     }
-}
 
-impl ContentEq for BigIntLiteral<'_> {
-    fn content_eq(&self, other: &Self) -> bool {
-        ContentEq::content_eq(&self.raw, &other.raw)
+    /// Is this BigInt literal negative? (e.g. `-1n`).
+    pub fn is_negative(&self) -> bool {
+        self.raw.starts_with('-')
     }
 }
 
 impl fmt::Display for BigIntLiteral<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.raw.fmt(f)
-    }
-}
-
-impl ContentEq for RegExpLiteral<'_> {
-    fn content_eq(&self, other: &Self) -> bool {
-        ContentEq::content_eq(&self.regex, &other.regex)
     }
 }
 

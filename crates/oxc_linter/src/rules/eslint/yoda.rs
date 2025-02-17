@@ -6,7 +6,7 @@ use oxc_ast::{
     AstKind,
 };
 use oxc_diagnostics::OxcDiagnostic;
-use oxc_ecmascript::ToBigInt;
+use oxc_ecmascript::{is_global_reference::WithoutGlobalReferenceInformation, ToBigInt};
 use oxc_macros::declare_oxc_lint;
 use oxc_span::{GetSpan, Span};
 
@@ -264,7 +264,7 @@ fn is_not_yoda(expr: &BinaryExpression) -> bool {
         && is_literal_or_simple_template_literal(expr.right.get_inner_expression())
 }
 
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 fn do_diagnostic_with_fix(expr: &BinaryExpression, ctx: &LintContext, never: bool) {
     ctx.diagnostic_with_fix(yoda_diagnostic(expr.span, never, expr.operator.as_str()), |fix| {
         let left_span = expr.left.span();
@@ -486,7 +486,7 @@ fn get_number(expr: &Expression) -> Option<f64> {
     match expr {
         Expression::NumericLiteral(numeric) => Some(numeric.value),
         Expression::BigIntLiteral(big_int) => {
-            let big_int = big_int.to_big_int()?;
+            let big_int = big_int.to_big_int(&WithoutGlobalReferenceInformation {})?;
 
             let Ok(big_int) = big_int.to_string().parse::<f64>() else {
                 return None;

@@ -4,6 +4,45 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.51.0] - 2025-02-15
+
+- 21a9476 ast: [**BREAKING**] Remove `TSLiteral::RegExpLiteral` (#9056) (Dunqing)
+
+### Features
+
+
+### Bug Fixes
+
+- bc64c9d lexer: Fix decoding lone `\r` in template literals (#9066) (overlookmotel)
+- b8278d8 parser: Parse `let _: null` as `TSNullKeyword` (#9133) (Boshen)
+
+## [0.50.0] - 2025-02-12
+
+- d9189f1 ast: [**BREAKING**] Remove `PrivateInExpression::operator` field (#9041) (overlookmotel)
+
+### Bug Fixes
+
+- 662ab90 parser: Correct AST for `#field in x << y` (#9039) (Boshen)
+- 567bc2c parser: Fix `SequenceExpression` span (#9035) (hi-ogawa)
+
+### Refactor
+
+
+## [0.49.0] - 2025-02-10
+
+- bbb075d ast: [**BREAKING**] Name `AstBuilder` enum builders after variant name not type name (#8890) (overlookmotel)
+
+### Refactor
+
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
+### Testing
+
+- cebb350 minfier: Clean up some esbuild tests (Boshen)
+
 ## [0.48.1] - 2025-01-26
 
 ### Features

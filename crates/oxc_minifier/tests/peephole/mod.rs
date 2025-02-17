@@ -4,7 +4,7 @@ mod esbuild;
 use oxc_minifier::CompressOptions;
 
 fn test(source_text: &str, expected: &str) {
-    let options = CompressOptions::default();
+    let options = CompressOptions::all_false();
     crate::test(source_text, expected, options);
 }
 
@@ -16,30 +16,13 @@ fn test_same(source_text: &str) {
 
 #[test]
 fn integration() {
-    // FIXME
-    // test(
-    // "function writeInteger(int) {
-    // if (int >= 0)
-    // if (int <= 0xffffffff)
-    // return this.u32(int);
-    // else if (int > -0x80000000)
-    // return this.n32(int);
-    // }",
-    // "function writeInteger(int) {
-    // if (int >= 0) {
-    // if (int <= 4294967295) return this.u32(int);
-    // if (int > -2147483648) return this.n32(int);
-    // }
-    // }",
-    // );
-
     test(
         "require('./index.js')(function (e, os) {
     if (e) return console.log(e)
     return console.log(JSON.stringify(os))
     })",
         r#"require("./index.js")(function(e, os) {
-    return console.log(e || JSON.stringify(os));
+    return e ? console.log(e) : console.log(JSON.stringify(os));
     });"#,
     );
 
@@ -58,8 +41,8 @@ fn integration() {
             return undefined;
           return isTimeDisabled === null || isTimeDisabled === void 0 ? void 0 : isTimeDisabled(value);
     }",
-        "function foo() {
-        return value === null || Array.isArray(value) || isTimeDisabled == null ? void 0 : isTimeDisabled(value);
+    "function foo() {
+        if (!(value === null || Array.isArray(value))) return isTimeDisabled == null ? void 0 : isTimeDisabled(value);
     }");
 
     test_same("a && (b && (c && (d && (e && (f && (g && (h && i && j && k && l && m && n && o && p && q && r && s && t && u && v && w && x && y && z)))))))");

@@ -1,6 +1,7 @@
 //! Convert UTF-8 span offsets to UTF-16.
 
 use oxc_span::Span;
+use oxc_syntax::module_record::{ModuleRecord, VisitMutModuleRecord};
 
 use crate::{ast::Program, visit::VisitMut};
 
@@ -29,7 +30,7 @@ impl Utf8ToUtf16 {
     }
 
     /// Convert all spans in the AST to UTF-16.
-    pub fn convert(mut self, program: &mut Program<'_>) {
+    pub fn convert(&mut self, program: &mut Program<'_>) {
         self.build_table(program.source_text);
         // Skip if source is entirely ASCII
         if self.translations.len() == 1 {
@@ -41,7 +42,12 @@ impl Utf8ToUtf16 {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation)]
+    /// Convert spans in ModuleRecord to UTF-16
+    pub fn convert_module_record(&mut self, module_record: &mut ModuleRecord<'_>) {
+        self.visit_module_record(module_record);
+    }
+
+    #[expect(clippy::cast_possible_truncation)]
     fn build_table(&mut self, source_text: &str) {
         // Translation from UTF-8 byte offset to UTF-16 char offset:
         //
@@ -81,7 +87,8 @@ impl Utf8ToUtf16 {
         span.end = self.convert_offset(span.end);
     }
 
-    fn convert_offset(&self, utf8_offset: u32) -> u32 {
+    /// Convert UTF-8 offset to UTF-16.
+    pub fn convert_offset(&self, utf8_offset: u32) -> u32 {
         // Find the first entry in table *after* the UTF-8 offset.
         // The difference we need to subtract is recorded in the entry prior to it.
         let index =
@@ -96,6 +103,12 @@ impl Utf8ToUtf16 {
 }
 
 impl VisitMut<'_> for Utf8ToUtf16 {
+    fn visit_span(&mut self, span: &mut Span) {
+        self.convert_span(span);
+    }
+}
+
+impl VisitMutModuleRecord for Utf8ToUtf16 {
     fn visit_span(&mut self, span: &mut Span) {
         self.convert_span(span);
     }

@@ -4,6 +4,47 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.51.0] - 2025-02-15
+
+- 21a9476 ast: [**BREAKING**] Remove `TSLiteral::RegExpLiteral` (#9056) (Dunqing)
+
+- 9091387 ast: [**BREAKING**] Remove `TSType::TSQualifiedName` (#9051) (Dunqing)
+
+### Features
+
+
+### Bug Fixes
+
+- d9684af codegen: Fix missing StringLiteral sourcemap (#9064) (hi-ogawa)
+
+## [0.49.0] - 2025-02-10
+
+### Features
+
+- b4ee617 codegen: Prefer backquotes over double / single quotes (#8839) (sapphi-red)
+
+### Bug Fixes
+
+- be71b03 codegen: Parenthesis is lacking when a pure comment is placed before a function expression inside a call expression (#8968) (Dunqing)
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
+## [0.48.2] - 2025-02-02
+
+### Bug Fixes
+
+- 0928a19 codegen: Emit this parameters of class methods (#8834) (michaelm)
+
+### Performance
+
+- d8fac6d codegen: Avoid a heap allocation when printing floats (#8807) (Boshen)
+
+### Refactor
+
+- 6aa2dde codegen: Accept SymbolTable instead of Mangler (#8829) (Daniel Bulant)
+
 ## [0.48.1] - 2025-01-26
 
 ### Bug Fixes

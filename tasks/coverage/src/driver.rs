@@ -11,7 +11,7 @@ use oxc::{
     parser::{ParseOptions, ParserReturn},
     regular_expression::{LiteralParser, Options},
     semantic::{Semantic, SemanticBuilderReturn},
-    span::{cmp::ContentEq, SourceType, Span},
+    span::{ContentEq, SourceType, Span},
     transformer::{TransformOptions, TransformerReturn},
     CompilerInterface,
 };
@@ -76,7 +76,7 @@ impl CompilerInterface for Driver {
             self.errors.push(OxcDiagnostic::error("SourceType must not be unambiguous."));
         }
         // Make sure serialization doesn't crash; also for code coverage.
-        let _serializer = program.serializer();
+        program.test_to_json().unwrap();
         ControlFlow::Continue(())
     }
 

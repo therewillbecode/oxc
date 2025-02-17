@@ -605,8 +605,6 @@ macro_rules! inherit_variants {
                 /// Inherited from [`TSType`]
                 TSNamedTupleMember(Box<'a, TSNamedTupleMember<'a>>) = 24,
                 /// Inherited from [`TSType`]
-                TSQualifiedName(Box<'a, TSQualifiedName<'a>>) = 25,
-                /// Inherited from [`TSType`]
                 TSTemplateLiteralType(Box<'a, TSTemplateLiteralType<'a>>) = 26,
                 /// Inherited from [`TSType`]
                 TSTupleType(Box<'a, TSTupleType<'a>>) = 27,
@@ -672,7 +670,6 @@ macro_rules! inherit_variants {
                 TSLiteralType,
                 TSMappedType,
                 TSNamedTupleMember,
-                TSQualifiedName,
                 TSTemplateLiteralType,
                 TSTupleType,
                 TSTypeLiteral,
@@ -891,7 +888,6 @@ macro_rules! shared_enum_variants {
             #[inline]
             pub fn $as_child(&self) -> Option<&$child<'a>> {
                 if self.$is_child() {
-                    #[allow(unsafe_code)]
                     // SAFETY: Transmute is safe because discriminants + types are identical between
                     // `$parent` and `$child` for $child variants
                     Some(unsafe { &*std::ptr::from_ref(self).cast::<$child>() })
@@ -904,7 +900,6 @@ macro_rules! shared_enum_variants {
             #[inline]
             pub fn $as_child_mut(&mut self) -> Option<&mut $child<'a>> {
                 if self.$is_child() {
-                    #[allow(unsafe_code)]
                     // SAFETY: Transmute is safe because discriminants + types are identical between
                     // `$parent` and `$child` for $child variants
                     Some(unsafe { &mut *std::ptr::from_mut(self).cast::<$child>() })
@@ -966,7 +961,7 @@ pub(crate) use shared_enum_variants;
 /// <https://doc.rust-lang.org/std/mem/fn.discriminant.html>
 macro_rules! discriminant {
     ($ty:ident :: $variant:ident) => {{
-        #[allow(unsafe_code, clippy::undocumented_unsafe_blocks)]
+        #[expect(clippy::undocumented_unsafe_blocks)]
         unsafe {
             let t = std::mem::ManuallyDrop::new($ty::$variant(oxc_allocator::Box::dangling()));
             *(std::ptr::addr_of!(t).cast::<u8>())

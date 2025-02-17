@@ -4,6 +4,27 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.49.0] - 2025-02-10
+
+- bbb075d ast: [**BREAKING**] Name `AstBuilder` enum builders after variant name not type name (#8890) (overlookmotel)
+
+### Refactor
+
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
+## [0.48.2] - 2025-02-02
+
+### Bug Fixes
+
+- 0928a19 codegen: Emit this parameters of class methods (#8834) (michaelm)
+
+### Documentation
+
+- 57b7ca8 ast: Add documentation for all remaining JS AST methods (#8820) (Cam McHenry)
+
 ## [0.48.0] - 2025-01-24
 
 ### Features

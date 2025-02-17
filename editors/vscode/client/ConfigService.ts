@@ -6,7 +6,7 @@ export class ConfigService implements IDisposable {
   private static readonly _namespace = 'oxc';
   private readonly _disposables: IDisposable[] = [];
 
-  public readonly config: Config;
+  public config: Config;
 
   public onConfigChange:
     | ((this: ConfigService, config: ConfigurationChangeEvent) => void)
@@ -25,7 +25,7 @@ export class ConfigService implements IDisposable {
   private onVscodeConfigChange(event: ConfigurationChangeEvent): void {
     if (event.affectsConfiguration(ConfigService._namespace)) {
       this.config.refresh();
-      this.onConfigChange?.call(this, event);
+      this.onConfigChange?.(event);
     }
   }
 

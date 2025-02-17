@@ -193,7 +193,8 @@ pub struct ParseOptions {
     /// Allow [`return`] statements outside of functions.
     ///
     /// By default, a return statement at the top level raises an error (`false`).
-    /// Set this to `true` to accept such code.
+    ///
+    /// Default: `false`
     ///
     /// [`return`]: oxc_ast::ast::ReturnStatement
     pub allow_return_outside_function: bool,
@@ -265,8 +266,8 @@ mod parser_parse {
     ///
     /// `UniquePromise` is a zero-sized type and has no runtime cost. It's purely for the type-checker.
     ///
-    /// `UniquePromise::new_for_benchmarks` is a backdoor for benchmarks, so they can create a
-    /// `ParserImpl` or `Lexer`, and manipulate it directly, for testing/benchmarking purposes.
+    /// `UniquePromise::new_for_tests_and_benchmarks` is a backdoor for tests/benchmarks, so they can
+    /// create a `ParserImpl` or `Lexer`, and manipulate it directly, for testing/benchmarking purposes.
     pub(crate) struct UniquePromise(());
 
     impl UniquePromise {
@@ -278,8 +279,8 @@ mod parser_parse {
         /// Backdoor for tests/benchmarks to create a `UniquePromise` (see above).
         /// This function must NOT be exposed outside of tests and benchmarks,
         /// as it allows circumventing safety invariants of the parser.
-        #[cfg(feature = "benchmarking")]
-        pub fn new_for_benchmarks() -> Self {
+        #[cfg(any(test, feature = "benchmarking"))]
+        pub fn new_for_tests_and_benchmarks() -> Self {
             Self(())
         }
     }
@@ -482,7 +483,7 @@ impl<'a> ParserImpl<'a> {
         Ok(expr)
     }
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation)]
     fn parse_program(&mut self) -> Result<Program<'a>> {
         // initialize cur_token and prev_token by moving onto the first token
         self.bump_any();

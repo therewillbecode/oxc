@@ -4,6 +4,161 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.51.0] - 2025-02-15
+
+### Features
+
+- 36c8640 ecmascript: Support more string concatenation (#9121) (sapphi-red)
+- 6936b08 ecmascript: Fold `typeof` with ValueType information (#9086) (sapphi-red)
+- b25b84b minifier: Substitute redundant assignment target bindings (#9096) (camchenry)
+- 125d610 minifier: Fold String::charAt / String::charCodeAt more precisely (#9082) (sapphi-red)
+- 237ffba minifier: Fold bitwise binary expressions with negative BigInts (#9081) (sapphi-red)
+- 24830e6 minifier: Fold `a + 'a' + 1` to `a + 'a1'` (#9080) (sapphi-red)
+- b5eb6e5 minifier: Improve `remove_unused_expression` (#9071) (Boshen)
+
+### Bug Fixes
+
+- eb7cd62 ecmascript: To_number for shadowed undefined (#9106) (sapphi-red)
+- 8cbdf00 ecmascript: To_boolean for shadowed undefined (#9105) (sapphi-red)
+- 17c745c ecmascript: To_string for object with toString (#9104) (sapphi-red)
+- cfc71f9 ecmascript: To_string for shadowed undefined (#9103) (sapphi-red)
+- 2ab2a8f ecmascript: Handle shadowed global variables in `ValueType` (#9085) (sapphi-red)
+- 2fd1589 minifier: Compress computed string literals in method/property definitions (#9126) (camchenry)
+
+### Refactor
+
+- 8bd6eef ecmascript: Merge constant evaluation logics (#9120) (sapphi-red)
+- b164072 ecmascript: Extract to_numeric (#9111) (sapphi-red)
+- 8f79012 ecmascript: Pass IsGlobalReference to DetermineValueType instead of extending it (#9107) (sapphi-red)
+- db1744c ecmascript: Remove "constant_evaluation" / "side_effects" features (#9114) (sapphi-red)
+- d670ec7 ecmascript: Pass IsGlobalReference to MayHaveSideEffects instead of extending it (#9101) (sapphi-red)
+- f4e2d4e ecmascript: Allow IsGlobalReference to return None (#9100) (sapphi-red)
+- 29be94d minifier: Inline more minification methods (#9088) (Boshen)
+- 80f719e minifier: Clean up minimize_statements.rs (#9076) (Boshen)
+- d5edde0 minifier: Minimize `if (!foo) foo = bar;` -> `foo ||= bar` in the same AST pass (#9075) (Boshen)
+
+## [0.50.0] - 2025-02-12
+
+### Features
+
+- 4d2b0d5 minifier: Port esbuild `SimplifyUnusedExpr` (#9036) (Boshen)
+- df6941d minifier: Fold unary not (#9031) (Boshen)
+
+## [0.49.0] - 2025-02-10
+
+- bbb075d ast: [**BREAKING**] Name `AstBuilder` enum builders after variant name not type name (#8890) (overlookmotel)
+
+- b7ff7e1 span: [**BREAKING**] Export `ContentEq` trait from root of `oxc_span` crate (#8869) (overlookmotel)
+
+### Features
+
+- ad1a878 ecmascript: Support BigInt comparison (#9014) (sapphi-red)
+- d515cfd ecmascript: Detect objects without overridden `toString`/`valueOf`/`Symbol.toPrimitive` (#8993) (sapphi-red)
+- 2a10a99 ecmascript: Support arrays and objects for unary expression may_have_side_effects (#8990) (sapphi-red)
+- dd383c0 ecmascript: `ValueType::from` for PrivateInExpression (#8964) (sapphi-red)
+- c3eef2f ecmascript: `ValueType::from` for parenthesized expressions (#8962) (sapphi-red)
+- 2c3a46d ecmascript: Support more simple expressions by `ValueType::from` (#8961) (sapphi-red)
+- 4cec83f ecmascript: `ValueType::from` for bitwise not operator (#8955) (sapphi-red)
+- e3e9999 ecmascript: Complete may_have_side_effects (#8855) (sapphi-red)
+- cd84a05 minifier: Minimize expression statement `!x` -> `x` (#9012) (Boshen)
+- b416334 minifier: Remove useless string addition (#9011) (sapphi-red)
+- beeb2fb minifier: Implement `optimizeImplicitJump` (#8984) (Boshen)
+- ce3b744 minifier: Remove name from function / class expressions (#8997) (sapphi-red)
+- 3f7faed minifier: Remove unused function expression with name by remove_dead_code (#8996) (sapphi-red)
+- ec601f2 minifier: Improve `mangleFor` (#8901) (Boshen)
+- ca4831b minifier: Fold `typeof class {}` to `'function'` (#8949) (sapphi-red)
+- 9ffe9e9 minifier: Fold `typeof (() => {})` to `'function'` (#8948) (sapphi-red)
+- 36007de minifier: Fold typeof `{ foo }` when `foo` is declared (#8947) (sapphi-red)
+- 56575b2 minifier: Fold complicated array literals passed to unary `+` (#8944) (sapphi-red)
+- 14462be minifier: Fold simple literals passed to unary `+` (#8943) (sapphi-red)
+- 4a86467 minifier: Remove unnecessary unary `+` inside numeric binary operators (#8957) (sapphi-red)
+- 4b4d543 minifier: Minimize block statements (#8857) (Boshen)
+- d6d13dd minifier: Minimize `!!(boolean_expr)` -> `boolean_expr` (#8849) (Boshen)
+- 20f2c46 minifier: `for (;;) { var x }` -> `for (;;) var x;` (#8847) (Boshen)
+- e623745 minifier: Minify `String::concat` into template literal (#8443) (sapphi-red)
+- 84b62c7 minifier: Implement minimize for statement (#8846) (Boshen)
+
+### Bug Fixes
+
+- 9a5a926 ecmascript: Fix may_have_side_effects for binary expressions (#8991) (sapphi-red)
+- 660c314 ecmascript: Fix may_have_side_effects for unary expressions (#8989) (sapphi-red)
+- 8ab7204 ecmascript: Fix `ValueType::from` for `AssignmentExpression` (#8959) (sapphi-red)
+- aeb122d ecmascript: Fix `ValueType::from` for numeric binary operators (#8956) (sapphi-red)
+- 1182c20 ecmascript: `ValueType::from` for unknown value should return Undetermined instead of Number (#8954) (sapphi-red)
+- b5a7785 minifier: Fix comparison of strings with unicode characters (#8942) (sapphi-red)
+- 4a723f1 minifier: Should not merge conditional function calls if referencing the function has a side-effect (#8922) (sapphi-red)
+
+### Refactor
+
+- 9b5d800 minifier: Move equality comparison to ConstantEvaluation (#9009) (sapphi-red)
+- 9193217 minifier: Remove duplicated `typeof` comparison to non-strict equality compression (#9010) (sapphi-red)
+- 85b8ea4 minifier: Extract `symbols().symbol_is_used(symbol_id)` (#8995) (sapphi-red)
+- 9c84c6d minifier: Break up methods into different files (#8843) (Boshen)
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
+### Testing
+
+- e1fd3e8 ecmascript: Add tests for `ValueType` for undetermined cases (#8960) (sapphi-red)
+- cc7bb9c ecmascript: Add test for `ValueType` and update document (#8951) (sapphi-red)
+- cebb350 minfier: Clean up some esbuild tests (Boshen)
+- 8495c21 minifier: Enable passed tests (Boshen)
+- f6d43f5 minifier: Enable esbuild constant evaluation tests (#8941) (sapphi-red)
+
+## [0.48.2] - 2025-02-02
+
+### Features
+
+- 86b6219 mangler: Use characters in the order of their likely frequency (#8771) (sapphi-red)
+- d553318 minifier: Complete `MangleIf` (#8810) (Boshen)
+- 5cfea76 minifier: Compress `(a = _a) != null ? a : b` and `(a = _a) != null ? a.b() : undefined` (#8823) (sapphi-red)
+- f02d9e9 minifier: Merge single var declarations without init into for-of (#8813) (sapphi-red)
+- 99b47ed minifier: Merge single var declarations without init into for-in (#8812) (sapphi-red)
+- d9f1d0d minifier: Merge expressions in for-in statement head (#8811) (sapphi-red)
+- 18f1b15 minifier: Implement known method `Array.of` (#8805) (7086cmd)
+- e525e60 minifier: Compress `a != null ? a.b : undefined` to `a?.b` (#8802) (#8808) (Boshen)
+- e353a01 minifier: Compress `a != null ? a.b : undefined` to `a?.b` (#8802) (sapphi-red)
+- 72d74a2 minifier: Compress `a != null ? a : b` into `a ?? b` (#8801) (sapphi-red)
+- 249895f minifier: Implement variadic Math methods in known methods (#8783) (Ethan Goh)
+- 7ea99f4 minifier: Compress array of string literals to `'str1,str2'.split(',')` (#8786) (sapphi-red)
+- 6c627df minifier: Implement unary Math functions in known methods (#8781) (7086cmd)
+- ad14403 minifier: Compress `typeof a.b === 'undefined'` to `a.b === void 0` (#8751) (sapphi-red)
+- f7f2d2f minifier: Compress `a == null && b` to `a ?? b` when return value is ignored (#8749) (sapphi-red)
+- 3c1c92c minifier: Support `a[0]` and `this.a` in `has_no_side_effect_for_evaluation_same_target` (#8748) (sapphi-red)
+- 29417dd minifier: Minimize `!(a, b)` -> `a, !b` (#8746) (Boshen)
+- 3ece991 minifier: Remove unused `import.meta` statement (#8744) (Boshen)
+- 3ef980a minifier: Remove unreachable statements after `break` and `continue` (#8743) (Boshen)
+
+### Bug Fixes
+
+- 831928d minifier: Mark as changed when `else if` was converted to `if` (#8837) (翠 / green)
+- f8548ec minifier: Unreachable error when compressing string literal arrays with `.split()` (#8806) (sapphi-red)
+- 2eac9c0 minifier: Fix `var undefined = 1; foo === null || foo === undefined` should not be compressed (#8803) (sapphi-red)
+- ae7f670 minifier: Avoid minifying `+void unknown` to `NaN` and fix typo (#8784) (7086cmd)
+- 8781537 minifier: `{ let foo; const bar = undefined; }` -> `{ let foo, bar; }` (#8764) (Boshen)
+- 8a6ae8a minifier: Do not change `const` to `let` if assignment to constant variable. (#8761) (Boshen)
+- 66c33ed minifier: Remove incorrect not + conditional expression compression (#8759) (翠 / green)
+- a3b078a minifier: Fix crash with `[]['concat'](1)` (#8750) (sapphi-red)
+
+### Refactor
+
+- 6aa2dde codegen: Accept SymbolTable instead of Mangler (#8829) (Daniel Bulant)
+- 3abf2f7 minifier: Extract `extract_id_or_assign_to_id` method (#8822) (sapphi-red)
+- a861d93 minifier: Port esbuild's `mangleStmts` (#8770) (Boshen)
+- 0fcff20 minifier: Remove `EmptyStatement` in a single place (#8745) (Boshen)
+
+### Testing
+
+- dc4c388 minifier: Fail tests when parse fails (#8836) (sapphi-red)
+- 3ac5020 minifier: Enable more passed esbuild tests (#8804) (Boshen)
+- 0c4c739 minifier: Cleanup some tests in substitute_alternate_syntax (#8768) (sapphi-red)
+- 79d5481 minifier: Add and enable some tests in fold_constants (#8769) (sapphi-red)
+- ef55e7c minifier: Check idempotency for all tests (#8754) (Boshen)
+- d072f09 minifier: Enable more ignored tests (#8753) (Boshen)
+- e78e468 minifier: Cleanup some tests in minimize_conditions (#8752) (sapphi-red)
+
 ## [0.48.1] - 2025-01-26
 
 ### Features

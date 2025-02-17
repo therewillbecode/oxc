@@ -4,6 +4,103 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.15.11] - 2025-02-16
+
+- 21a9476 ast: [**BREAKING**] Remove `TSLiteral::RegExpLiteral` (#9056) (Dunqing)
+
+- 9091387 ast: [**BREAKING**] Remove `TSType::TSQualifiedName` (#9051) (Dunqing)
+
+### Features
+
+- d93bf0e linter: Implement func-style rule (#8977) (yefan)
+- a870526 linter: Add vitest/no-standalone-expect rule (#8986) (Tyler Earls)
+- addaa8e linter: Support es2025 env (#8985) (Sysix)
+- 5d508a4 linter: Support `env` and `globals` in `overrides` configuration (#8915) (Sysix)
+- 41ad42a linter: Add init-declarations rule (#8909) (yefan)
+- 125d610 minifier: Fold String::charAt / String::charCodeAt more precisely (#9082) (sapphi-red)
+
+### Bug Fixes
+
+- 8cbdf00 ecmascript: To_boolean for shadowed undefined (#9105) (sapphi-red)
+- cfc71f9 ecmascript: To_string for shadowed undefined (#9103) (sapphi-red)
+- b68e240 linter: Rule `unicorn/new-for-builtins` do not look into `globals` (#9146) (Sysix)
+- 490c77d linter: Rule `no-constant-binary-expression` do not look into `globals` (#9145) (Sysix)
+- b36734c linter: Rule `promise/avoid-new` do not look into `globals` (#9144) (Sysix)
+- 091a5c1 linter: Rule `no-new-native-nonconstructor` do not look into globals (#9143) (Sysix)
+- 1c1d2e6 linter: Rule `symbol-description` do not look into `globals` (#9142) (Sysix)
+- 6d15153 linter: Rule `prefer-object-spreads` do not look into `globals` (#9141) (Sysix)
+- 9214661 linter: Rule `valid-typeof` do not check for `globals` (#9140) (Sysix)
+- 29141d6 linter: Rule `no-restricted-globals`: do not check for `globals` entries (#9139) (Sysix)
+- 23d0d95 linter: Report `no-console` when the `globals.console` is `off` (#9138) (Sysix)
+- 157e1a1 linter: False positive in `jest/no-conditional-expect` (#9053) (dalaoshu)
+- 28b5990 linter: Rule `no-restricted-imports`: improve diagnostics (#8113) (Alexander S.)
+- b191390 linter: `no-global-assign` look into `globals` config (#8963) (Sysix)
+- 44d985b linter: Correct the `is_reference_to_global_variable` (#8920) (dalaoshu)
+
+### Documentation
+
+- 02cb45b linter: Add prettier-ignore where formatting ruins code (#8978) (camchenry)
+
+### Refactor
+
+- 97cc1c8 ast: Remove `TSLiteral::NullLiteral` (replaced by `TSNullKeyword`) (#9147) (Boshen)
+- 9ca22f4 linter: Improve `jsx-a11y/heading-has-content` (#9089) (dalaoshu)
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
+## [0.15.10] - 2025-02-06
+
+- b7ff7e1 span: [**BREAKING**] Export `ContentEq` trait from root of `oxc_span` crate (#8869) (overlookmotel)
+
+### Features
+
+- d6d80f7 linter: Add suggestion fixer for `eslint/no-iterator` (#8894) (dalaoshu)
+
+### Bug Fixes
+
+- baf3e4e linter: Correctly replace rule severity with duplicate rule name configurations (#8840) (dalaoshu)
+
+### Performance
+
+- 8a4988d linter: Use parallel iterator directly instead of iter and parallel bridge (#8831) (Cam McHenry)
+
+### Refactor
+
+- bb9d763 linter: Remove usage of `url` crate (#8833) (camchenry)
+- 4fcf719 linter: Replace MIME guessing with extension check (#8832) (camchenry)
+
+## [0.15.9] - 2025-02-01
+
+### Features
+
+- 1a41181 linter: Implement `eslint/prefer-object-spread` (#8216) (tbashiyy)
+- adb8ebd linter: Implement no-useless-call rule (#8789) (keita hino)
+- 3790933 linter: Add vitest/prefer-lowercase-title rule (#8152) (Tyler Earls)
+- e8e6917 linter: Unicorn/switch-cases-braces support options (#8704) (1zumii)
+
+### Bug Fixes
+
+- 8ce21d1 linter: Can't disable `no-nested-ternary` rule anymore (#8600) (dalaoshu)
+- 4f30a17 linter: Unicorn/switch-case-braces mangles code when applying fix (#8758) (Tyler Earls)
+- 1de6f85 linter: No-lone-blocks erroring on block statements containing comments (#8720) (Tyler Earls)
+- 77ef61a linter: Fix diagnostic spans for `oxc/no-async-await` (#8721) (camchenry)
+- f15bdce linter: Catch `Promise` in `typescript/array-type` rule (#8702) (Rintaro Itokawa)
+
+### Performance
+
+- d318238 linter: Remove sorting of rules in cache (#8718) (camchenry)
+
+### Documentation
+
+- 57b7ca8 ast: Add documentation for all remaining JS AST methods (#8820) (Cam McHenry)
+
+### Refactor
+
+- c2fdfc4 linter: Correctly handle loose options for `eslint/eqeqeq` (#8798) (dalaoshu)
+- 0aeaedd linter: Support loose options for `eslint/eqeqeq` (#8790) (dalaoshu)
+
 ## [0.15.8] - 2025-01-24
 
 ### Features

@@ -1,4 +1,4 @@
-#![allow(missing_docs)] // FIXME
+#![expect(missing_docs)] // FIXME
 
 // NB: `#[span]`, `#[scope(...)]`,`#[visit(...)]` and `#[generate_derive(...)]` do NOT do anything to the code.
 // They are purely markers for codegen used in `tasks/ast_tools` and `crates/oxc_traverse/scripts`. See docs in those crates.
@@ -9,7 +9,7 @@ use std::cell::Cell;
 use oxc_allocator::{Box, CloneIn, GetAddress, Vec};
 use oxc_ast_macros::ast;
 use oxc_estree::ESTree;
-use oxc_span::{cmp::ContentEq, Atom, GetSpan, GetSpanMut, SourceType, Span};
+use oxc_span::{Atom, ContentEq, GetSpan, GetSpanMut, SourceType, Span};
 use oxc_syntax::{
     operator::{
         AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator, UpdateOperator,
@@ -21,14 +21,16 @@ use oxc_syntax::{
 
 use super::{macros::inherit_variants, *};
 
-/// Represents the root of a JavaScript abstract syntax tree (AST), containing metadata about the source, directives, top-level statements, and scope information.
+/// Represents the root of a JavaScript abstract syntax tree (AST), containing metadata about the source,
+/// directives, top-level statements, and scope information.
 #[ast(visit)]
 #[scope(
-    flags(ScopeFlags::Top),
-    strict_if(self.source_type.is_strict() || self.has_use_strict_directive()),
+    flags = ScopeFlags::Top,
+    strict_if = self.source_type.is_strict() || self.has_use_strict_directive(),
 )]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(field_order(span, directives, source_type, hashbang))]
 pub struct Program<'a> {
     pub span: Span,
     pub source_type: SourceType,
@@ -38,10 +40,10 @@ pub struct Program<'a> {
     #[estree(skip)]
     pub comments: Vec<'a, Comment>,
     pub hashbang: Option<Hashbang<'a>>,
+    #[estree(rename = "body")]
     pub directives: Vec<'a, Directive<'a>>,
+    #[estree(append_to = "directives")]
     pub body: Vec<'a, Statement<'a>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -198,11 +200,13 @@ pub use match_expression;
 
 /// `foo` in `let foo = 1;`
 ///
-/// Fundamental syntactic structure used for naming variables, functions, and properties. It must start with a Unicode letter (including $ and _) and can be followed by Unicode letters, digits, $, or _.
+/// Fundamental syntactic structure used for naming variables, functions, and properties.
+/// It must start with a Unicode letter (including $ and _) and can be followed by Unicode letters,
+/// digits, `$`, or `_`.
 #[ast(visit)]
 #[derive(Debug, Clone)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(type = "Identifier")]
+#[estree(rename = "Identifier")]
 pub struct IdentifierName<'a> {
     pub span: Span,
     pub name: Atom<'a>,
@@ -216,7 +220,7 @@ pub struct IdentifierName<'a> {
 #[ast(visit)]
 #[derive(Debug, Clone)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(type = "Identifier")]
+#[estree(rename = "Identifier")]
 pub struct IdentifierReference<'a> {
     pub span: Span,
     /// The name of the identifier being referenced.
@@ -226,20 +230,19 @@ pub struct IdentifierReference<'a> {
     /// Identifies what identifier this refers to, and how it is used. This is
     /// set in the bind step of semantic analysis, and will always be [`None`]
     /// immediately after parsing.
-    #[estree(skip)]
-    #[clone_in(default)]
     pub reference_id: Cell<Option<ReferenceId>>,
 }
 
 /// `x` in `const x = 0;`
 ///
-/// Represents a binding identifier, which is an identifier that is used to declare a variable, function, class, or object.
+/// Represents a binding identifier, which is an identifier that is used to declare a variable,
+/// function, class, or object.
 ///
 /// See: [13.1 Identifiers](https://tc39.es/ecma262/#sec-identifiers)
 #[ast(visit)]
 #[derive(Debug, Clone)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(type = "Identifier")]
+#[estree(rename = "Identifier")]
 pub struct BindingIdentifier<'a> {
     pub span: Span,
     /// The identifier name being bound.
@@ -250,8 +253,6 @@ pub struct BindingIdentifier<'a> {
     /// you choose to skip semantic analysis, this will always be [`None`].
     ///
     /// [`semantic analysis`]: <https://docs.rs/oxc_semantic/latest/oxc_semantic/struct.SemanticBuilder.html>
-    #[estree(skip)]
-    #[clone_in(default)]
     pub symbol_id: Cell<Option<SymbolId>>,
 }
 
@@ -263,7 +264,7 @@ pub struct BindingIdentifier<'a> {
 #[ast(visit)]
 #[derive(Debug, Clone)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(type = "Identifier")]
+#[estree(rename = "Identifier")]
 pub struct LabelIdentifier<'a> {
     pub span: Span,
     pub name: Atom<'a>,
@@ -287,7 +288,6 @@ pub struct ThisExpression {
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
 pub struct ArrayExpression<'a> {
     pub span: Span,
-    #[estree(type = "Array<SpreadElement | Expression | null>")]
     pub elements: Vec<'a, ArrayExpressionElement<'a>>,
     /// Array trailing comma
     /// <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Trailing_commas#arrays>
@@ -304,7 +304,6 @@ inherit_variants! {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(custom_ts_def)]
 pub enum ArrayExpressionElement<'a> {
     /// `...[3, 4]` in `const array = [1, 2, ...[3, 4], null];`
     SpreadElement(Box<'a, SpreadElement<'a>>) = 64,
@@ -324,14 +323,18 @@ pub enum ArrayExpressionElement<'a> {
 /// Serialized as `null` in JSON AST. See `serialize.rs`.
 #[ast(visit)]
 #[derive(Debug, Clone)]
-#[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq)]
+#[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(custom_serialize, ts_alias = "null")]
 pub struct Elision {
     pub span: Span,
 }
 
 /// `{ a: 1 }` in `const obj = { a: 1 };`
 ///
-/// Represents an object literal, which can include properties, spread properties, or computed properties and trailing comma.
+/// Represents an object literal, which can include properties, spread properties,
+/// or computed properties.
+///
+/// If the object literal has a trailing comma, `trailing_comma` contains the span of that comma.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
@@ -360,6 +363,11 @@ pub enum ObjectPropertyKind<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    rename = "Property",
+    field_order(span, method, shorthand, computed, key, kind, value),
+    custom_serialize
+)]
 pub struct ObjectProperty<'a> {
     pub span: Span,
     pub kind: PropertyKind,
@@ -408,6 +416,7 @@ pub enum PropertyKind {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(field_order(span, expressions, quasis))]
 pub struct TemplateLiteral<'a> {
     pub span: Span,
     pub quasis: Vec<'a, TemplateElement<'a>>,
@@ -434,6 +443,7 @@ pub struct TaggedTemplateExpression<'a> {
 #[ast(visit)]
 #[derive(Debug, Clone)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(field_order(span, value, tail))]
 pub struct TemplateElement<'a> {
     pub span: Span,
     pub tail: bool,
@@ -457,7 +467,8 @@ pub struct TemplateElementValue<'a> {
     pub cooked: Option<Atom<'a>>,
 }
 
-/// Represents a member access expression, which can include computed member access, static member access, or private field access.
+/// Represents a member access expression, which can include computed member access,
+/// static member access, or private field access.
 ///
 /// <https://tc39.es/ecma262/#prod-MemberExpression>
 #[ast(visit)]
@@ -489,9 +500,15 @@ pub use match_member_expression;
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    rename = "MemberExpression",
+    add_fields(computed = True),
+    field_order(span, object, expression, computed, optional),
+)]
 pub struct ComputedMemberExpression<'a> {
     pub span: Span,
     pub object: Expression<'a>,
+    #[estree(rename = "property")]
     pub expression: Expression<'a>,
     pub optional: bool, // for optional chaining
 }
@@ -502,6 +519,11 @@ pub struct ComputedMemberExpression<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    rename = "MemberExpression",
+    add_fields(computed = False),
+    field_order(span, object, property, computed, optional),
+)]
 pub struct StaticMemberExpression<'a> {
     pub span: Span,
     pub object: Expression<'a>,
@@ -515,9 +537,15 @@ pub struct StaticMemberExpression<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    rename = "MemberExpression",
+    add_fields(computed = False),
+    field_order(span, object, field, computed, optional),
+)]
 pub struct PrivateFieldExpression<'a> {
     pub span: Span,
     pub object: Expression<'a>,
+    #[estree(rename = "property")]
     pub field: PrivateIdentifier<'a>,
     pub optional: bool, // for optional chaining
 }
@@ -616,7 +644,8 @@ pub enum Argument<'a> {
 
 /// `++i` in `let i = 0; ++i;`
 ///
-/// Represents an update expression, which can include an operator and an argument. The following syntaxes are supported. `++a`, `a++`, `--a`, `a--`
+/// Represents an update expression, which can include an operator and an argument.
+/// The following syntaxes are supported: `++a`, `a++`, `--a`, `a--`.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
@@ -629,10 +658,12 @@ pub struct UpdateExpression<'a> {
 
 /// `typeof` in `typeof a === "string"`
 ///
-/// Represents a unary expression, which can include an operator and an argument. The following syntaxes are supported. `+a`, `-a`, `~a`, `!a`, `delete a`, `void a`, `typeof a`
+/// Represents a unary expression, which includes an operator and an argument.
+/// The following syntaxes are supported: `+a`, `-a`, `~a`, `!a`, `delete a`, `void a`, `typeof a`.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(add_fields(prefix = True), field_order(span, operator, prefix, argument))]
 pub struct UnaryExpression<'a> {
     pub span: Span,
     pub operator: UnaryOperator,
@@ -641,7 +672,7 @@ pub struct UnaryExpression<'a> {
 
 /// `1 + 1` in `const two = 1 + 1;`
 ///
-/// Represents a binary expression, which can include a left expression, an operator, and a right expression.
+/// Represents a binary expression, which include a left expression, an operator, and a right expression.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
@@ -652,22 +683,25 @@ pub struct BinaryExpression<'a> {
     pub right: Expression<'a>,
 }
 
-/// `#brand in obj` in `class Foo { #brand; static isFoo(obj) { return #brand in obj; } }`
-///
-/// Represents a private in expression, which can include a private identifier, an operator, and a expression.
+/// `#brand in obj` in `class Foo { #brand; static isFoo(obj) { return #brand in obj; } }`.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    rename = "BinaryExpression",
+    add_fields(operator = In),
+    field_order(span, left, operator, right),
+)]
 pub struct PrivateInExpression<'a> {
     pub span: Span,
     pub left: PrivateIdentifier<'a>,
-    pub operator: BinaryOperator, // BinaryOperator::In
     pub right: Expression<'a>,
 }
 
 /// `||` in `const foo = bar || 2;`
 ///
-/// Represents a logical expression, which can include a left expression, an operator, and a right expression. The following syntaxes are supported. `||`, `&&` and `??`
+/// Represents a logical expression, which includes a left expression, an operator, and a right expression.
+/// The following syntaxes are supported: `||`, `&&` and `??`.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
@@ -680,7 +714,7 @@ pub struct LogicalExpression<'a> {
 
 /// `bar ? 1 : 2` in `const foo = bar ? 1 : 2;`
 ///
-/// Represents a conditional expression, which can include a test, a consequent, and an alternate.
+/// Represents a conditional expression, which includes a test, a consequent, and an alternate.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
@@ -693,7 +727,7 @@ pub struct ConditionalExpression<'a> {
 
 /// `foo = 1` in `let foo; foo = 1;`
 ///
-/// Represents an assignment expression, which can include an operator, a target, and a expression.
+/// Represents an assignment expression, which includes an operator, a target, and an expression.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
@@ -804,6 +838,7 @@ pub use match_assignment_target_pattern;
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(rename = "ArrayPattern")]
 pub struct ArrayAssignmentTarget<'a> {
     pub span: Span,
     pub elements: Vec<'a, Option<AssignmentTargetMaybeDefault<'a>>>,
@@ -819,6 +854,7 @@ pub struct ArrayAssignmentTarget<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(rename = "ObjectPattern")]
 pub struct ObjectAssignmentTarget<'a> {
     pub span: Span,
     pub properties: Vec<'a, AssignmentTargetProperty<'a>>,
@@ -832,7 +868,7 @@ pub struct ObjectAssignmentTarget<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(type = "RestElement")]
+#[estree(rename = "RestElement")]
 pub struct AssignmentTargetRest<'a> {
     pub span: Span,
     #[estree(rename = "argument")]
@@ -858,9 +894,12 @@ pub enum AssignmentTargetMaybeDefault<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(rename = "AssignmentPattern")]
 pub struct AssignmentTargetWithDefault<'a> {
     pub span: Span,
+    #[estree(rename = "left")]
     pub binding: AssignmentTarget<'a>,
+    #[estree(rename = "right")]
     pub init: Expression<'a>,
 }
 
@@ -874,25 +913,54 @@ pub enum AssignmentTargetProperty<'a> {
 
 /// `foo` in `({ foo } = obj);`
 ///
-/// Represents an assignment target property identifier, which can include a binding and an init expression.
+/// Represents an assignment target property identifier, which includes a binding,
+/// and an optional init expression.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    rename = "Property",
+    add_fields(method = False, shorthand = True, computed = False, kind = Init),
+    field_order(span, method, shorthand, computed, binding, kind, init),
+)]
 pub struct AssignmentTargetPropertyIdentifier<'a> {
     pub span: Span,
+    #[estree(rename = "key")]
     pub binding: IdentifierReference<'a>,
+    #[estree(
+        rename = "value",
+        via = crate::serialize::AssignmentTargetPropertyIdentifierValue(self),
+        ts_type = "IdentifierReference | AssignmentTargetWithDefault",
+    )]
     pub init: Option<Expression<'a>>,
 }
 
 /// `foo: bar` in `({ foo: bar } = obj);`
 ///
-/// Represents an assignment target property property, which can include a name and a binding.
+/// Represents an assignment target property property, which includes a name and a binding.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    rename = "Property",
+    add_fields(method = False, shorthand = False, kind = Init),
+    field_order(span, method, shorthand, computed, name, binding, kind),
+)]
 pub struct AssignmentTargetPropertyProperty<'a> {
     pub span: Span,
+    /// The property key
+    /// ```
+    /// ({ prop: renamed } = obj)
+    ///    ^^^^
+    /// ```
+    #[estree(rename = "key")]
     pub name: PropertyKey<'a>,
+    /// The binding part of the property
+    /// ```
+    /// ({ prop: renamed } = obj)
+    ///          ^^^^^^^
+    /// ```
+    #[estree(rename = "value")]
     pub binding: AssignmentTargetMaybeDefault<'a>,
     /// Property was declared with a computed key
     pub computed: bool,
@@ -900,7 +968,7 @@ pub struct AssignmentTargetPropertyProperty<'a> {
 
 /// `a++, b++` in `let a = 1, b = 2; let result = (a++, b++);`
 ///
-/// Represents a sequence expression, which can include expressions.
+/// Represents a sequence expression.
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
@@ -1013,6 +1081,7 @@ pub enum Statement<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(rename = "ExpressionStatement")]
 pub struct Directive<'a> {
     pub span: Span,
     /// Directive with any escapes unescaped
@@ -1042,8 +1111,6 @@ pub struct Hashbang<'a> {
 pub struct BlockStatement<'a> {
     pub span: Span,
     pub body: Vec<'a, Statement<'a>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1086,6 +1153,7 @@ pub use match_declaration;
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(field_order(span, declarations, kind, declare))]
 pub struct VariableDeclaration<'a> {
     pub span: Span,
     pub kind: VariableDeclarationKind,
@@ -1186,8 +1254,6 @@ pub struct ForStatement<'a> {
     pub test: Option<Expression<'a>>,
     pub update: Option<Expression<'a>>,
     pub body: Statement<'a>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1217,8 +1283,6 @@ pub struct ForInStatement<'a> {
     pub left: ForStatementLeft<'a>,
     pub right: Expression<'a>,
     pub body: Statement<'a>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1248,8 +1312,6 @@ pub struct ForOfStatement<'a> {
     pub left: ForStatementLeft<'a>,
     pub right: Expression<'a>,
     pub body: Statement<'a>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1300,14 +1362,13 @@ pub struct SwitchStatement<'a> {
     pub discriminant: Expression<'a>,
     #[scope(enter_before)]
     pub cases: Vec<'a, SwitchCase<'a>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(field_order(span, consequent, test))]
 pub struct SwitchCase<'a> {
     pub span: Span,
     pub test: Option<Expression<'a>>,
@@ -1318,6 +1379,7 @@ pub struct SwitchCase<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(field_order(span, body, label))]
 pub struct LabeledStatement<'a> {
     pub span: Span,
     pub label: LabelIdentifier<'a>,
@@ -1381,7 +1443,7 @@ pub struct TryStatement<'a> {
 /// }
 /// ```
 #[ast(visit)]
-#[scope(flags(ScopeFlags::CatchClause))]
+#[scope(flags = ScopeFlags::CatchClause)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
 pub struct CatchClause<'a> {
@@ -1390,8 +1452,6 @@ pub struct CatchClause<'a> {
     pub param: Option<CatchParameter<'a>>,
     /// The statements run when an error is caught
     pub body: Box<'a, BlockStatement<'a>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1411,9 +1471,12 @@ pub struct CatchClause<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(no_type, ts_alias = "BindingPattern")]
 pub struct CatchParameter<'a> {
+    #[estree(skip)]
     pub span: Span,
     /// The bound error
+    #[estree(flatten)]
     pub pattern: BindingPattern<'a>,
 }
 
@@ -1441,7 +1504,7 @@ pub struct BindingPattern<'a> {
     // estree(flatten) the attributes because estree has no `BindingPattern`
     #[estree(
         flatten,
-        type = "(BindingIdentifier | ObjectPattern | ArrayPattern | AssignmentPattern)"
+        ts_type = "(BindingIdentifier | ObjectPattern | ArrayPattern | AssignmentPattern)"
     )]
     #[span]
     pub kind: BindingPatternKind<'a>,
@@ -1490,6 +1553,12 @@ pub struct ObjectPattern<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    rename = "Property",
+    add_fields(method = False, kind = Init),
+    field_order(span, method, shorthand, computed, key, kind, value),
+    custom_serialize,
+)]
 pub struct BindingProperty<'a> {
     pub span: Span,
     pub key: PropertyKey<'a>,
@@ -1520,7 +1589,7 @@ pub struct ArrayPattern<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(type = "RestElement")]
+#[estree(rename = "RestElement")]
 pub struct BindingRestElement<'a> {
     pub span: Span,
     pub argument: BindingPattern<'a>,
@@ -1562,13 +1631,24 @@ pub struct BindingRestElement<'a> {
 /// }
 /// ```
 #[ast(visit)]
+#[visit(args(flags = ScopeFlags))]
 #[scope(
     // `flags` passed in to visitor via parameter defined by `#[visit(args(flags = ...))]` on parents
-    flags(flags),
-    strict_if(self.has_use_strict_directive()),
+    flags = flags,
+    strict_if = self.has_use_strict_directive(),
 )]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+// https://github.com/estree/estree/blob/master/es5.md#patterns
+// https://github.com/DefinitelyTyped/DefinitelyTyped/blob/cd61c555bfc93e985b313263a42ed78074570d08/types/estree/index.d.ts#L411
+#[estree(
+    add_ts_def = "type ParamPattern = FormalParameter | FormalParameterRest",
+    add_fields(expression = False),
+    field_order(
+        r#type, span, id, expression, generator, r#async, params, body,
+        declare, type_parameters, this_param, return_type,
+    ),
+)]
 pub struct Function<'a> {
     pub span: Span,
     pub r#type: FunctionType,
@@ -1607,6 +1687,7 @@ pub struct Function<'a> {
     /// Function parameters.
     ///
     /// Does not include `this` parameters used by some TypeScript functions.
+    #[estree(ts_type = "ParamPattern[]")]
     pub params: Box<'a, FormalParameters<'a>>,
     /// The TypeScript return type annotation.
     #[ts]
@@ -1624,8 +1705,6 @@ pub struct Function<'a> {
     /// }
     /// ```
     pub body: Option<Box<'a, FunctionBody<'a>>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1645,11 +1724,21 @@ pub enum FunctionType {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
-#[estree(custom_serialize)]
+#[estree(
+    custom_serialize,
+    add_ts_def = "
+        interface FormalParameterRest extends Span {
+            type: 'RestElement';
+            argument: BindingPatternKind;
+            typeAnnotation: TSTypeAnnotation | null;
+            optional: boolean;
+        }
+    "
+)]
 pub struct FormalParameters<'a> {
     pub span: Span,
     pub kind: FormalParameterKind,
-    #[estree(type = "Array<FormalParameter | FormalParameterRest>")]
+    #[estree(ts_type = "Array<FormalParameter | FormalParameterRest>")]
     pub items: Vec<'a, FormalParameter<'a>>,
     #[estree(skip)]
     pub rest: Option<Box<'a, BindingRestElement<'a>>>,
@@ -1658,10 +1747,15 @@ pub struct FormalParameters<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+// Pluralize as `FormalParameterList` to avoid naming clash with `FormalParameters`.
+#[plural(FormalParameterList)]
+#[estree(no_type, field_order(pattern, decorators, accessibility, readonly, r#override))]
 pub struct FormalParameter<'a> {
+    #[estree(skip)]
     pub span: Span,
     #[ts]
     pub decorators: Vec<'a, Decorator<'a>>,
+    #[estree(flatten)]
     pub pattern: BindingPattern<'a>,
     #[ts]
     pub accessibility: Option<TSAccessibility>,
@@ -1690,20 +1784,27 @@ pub enum FormalParameterKind {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(rename = "BlockStatement")]
 pub struct FunctionBody<'a> {
     pub span: Span,
+    #[estree(rename = "body")]
     pub directives: Vec<'a, Directive<'a>>,
+    #[estree(append_to = "directives")]
     pub statements: Vec<'a, Statement<'a>>,
 }
 
 /// Arrow Function Definitions
 #[ast(visit)]
 #[scope(
-    flags(ScopeFlags::Function | ScopeFlags::Arrow),
-    strict_if(self.has_use_strict_directive()),
+    flags = ScopeFlags::Function | ScopeFlags::Arrow,
+    strict_if = self.has_use_strict_directive(),
 )]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[estree(
+    add_fields(id = Null, generator = False),
+    field_order(span, id, expression, generator, r#async, params, body, type_parameters, return_type),
+)]
 pub struct ArrowFunctionExpression<'a> {
     pub span: Span,
     /// Is the function body an arrow expression? i.e. `() => expr` instead of `() => {}`
@@ -1711,13 +1812,14 @@ pub struct ArrowFunctionExpression<'a> {
     pub r#async: bool,
     #[ts]
     pub type_parameters: Option<Box<'a, TSTypeParameterDeclaration<'a>>>,
+    #[estree(ts_type = "ParamPattern[]")]
     pub params: Box<'a, FormalParameters<'a>>,
     #[ts]
     pub return_type: Option<Box<'a, TSTypeAnnotation<'a>>>,
     /// See `expression` for whether this arrow expression returns an expression.
+    // ESTree: https://github.com/estree/estree/blob/master/es2015.md#arrowfunctionexpression
+    #[estree(via = crate::serialize::ArrowFunctionExpressionBody(self), ts_type = "FunctionBody | Expression")]
     pub body: Box<'a, FunctionBody<'a>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1733,9 +1835,14 @@ pub struct YieldExpression<'a> {
 
 /// Class Definitions
 #[ast(visit)]
-#[scope(flags(ScopeFlags::StrictMode))]
+#[scope(flags = ScopeFlags::StrictMode)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[rustfmt::skip]
+#[estree(field_order(
+    r#type, span, id, super_class, body,
+    decorators, type_parameters, super_type_parameters, implements, r#abstract, declare,
+))]
 pub struct Class<'a> {
     pub span: Span,
     pub r#type: ClassType,
@@ -1803,8 +1910,6 @@ pub struct Class<'a> {
     pub declare: bool,
     /// Id of the scope created by the [`Class`], including type parameters and
     /// statements within the [`ClassBody`].
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -1877,6 +1982,11 @@ pub enum ClassElement<'a> {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[rustfmt::skip]
+#[estree(field_order(
+    r#type, span, r#static, computed, key, kind, value,
+    decorators, r#override, optional, accessibility
+))]
 pub struct MethodDefinition<'a> {
     pub span: Span,
     /// Method definition type
@@ -1916,6 +2026,11 @@ pub enum MethodDefinitionType {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[rustfmt::skip]
+#[estree(field_order(
+    r#type, span, r#static, computed, key, value,
+    decorators, declare, r#override, optional, definite, readonly, type_annotation, accessibility,
+))]
 pub struct PropertyDefinition<'a> {
     pub span: Span,
     pub r#type: PropertyDefinitionType,
@@ -2049,14 +2164,12 @@ pub struct PrivateIdentifier<'a> {
 /// }
 /// ```
 #[ast(visit)]
-#[scope(flags(ScopeFlags::ClassStaticBlock))]
+#[scope(flags = ScopeFlags::ClassStaticBlock)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
 pub struct StaticBlock<'a> {
     pub span: Span,
     pub body: Vec<'a, Statement<'a>>,
-    #[estree(skip)]
-    #[clone_in(default)]
     pub scope_id: Cell<Option<ScopeId>>,
 }
 
@@ -2138,6 +2251,11 @@ pub enum AccessorPropertyType {
 #[ast(visit)]
 #[derive(Debug)]
 #[generate_derive(CloneIn, GetSpan, GetSpanMut, ContentEq, ESTree)]
+#[rustfmt::skip]
+#[estree(field_order(
+    r#type, span, key, value, computed, r#static,
+    decorators, definite, type_annotation, accessibility,
+))]
 pub struct AccessorProperty<'a> {
     pub span: Span,
     pub r#type: AccessorPropertyType,
@@ -2186,7 +2304,13 @@ pub struct AccessorProperty<'a> {
 pub struct ImportExpression<'a> {
     pub span: Span,
     pub source: Expression<'a>,
+    #[estree(
+        rename = "options",
+        via = crate::serialize::import_expression_options(&self.arguments),
+        ts_type = "Expression | null"
+    )]
     pub arguments: Vec<'a, Expression<'a>>,
+    #[estree(skip)]
     pub phase: Option<ImportPhase>,
 }
 
@@ -2196,12 +2320,13 @@ pub struct ImportExpression<'a> {
 pub struct ImportDeclaration<'a> {
     pub span: Span,
     /// `None` for `import 'foo'`, `Some([])` for `import {} from 'foo'`
-    #[estree(via = crate::serialize::OptionVecDefault, type = "Array<ImportDeclarationSpecifier>")]
+    #[estree(via = crate::serialize::OptionVecDefault(&self.specifiers), ts_type = "Array<ImportDeclarationSpecifier>")]
     pub specifiers: Option<Vec<'a, ImportDeclarationSpecifier<'a>>>,
     pub source: StringLiteral<'a>,
     pub phase: Option<ImportPhase>,
     /// Some(vec![]) for empty assertion
     #[ts]
+    #[estree(rename = "attributes", via = crate::serialize::ImportExportWithClause(&self.with_clause), ts_type = "Array<ImportAttribute>")]
     pub with_clause: Option<Box<'a, WithClause<'a>>>,
     /// `import type { foo } from 'bar'`
     #[ts]
@@ -2338,6 +2463,7 @@ pub struct ExportNamedDeclaration<'a> {
     pub export_kind: ImportOrExportKind,
     /// Some(vec![]) for empty assertion
     #[ts]
+    #[estree(rename = "attributes", via = crate::serialize::ImportExportWithClause(&self.with_clause), ts_type = "Array<ImportAttribute>")]
     pub with_clause: Option<Box<'a, WithClause<'a>>>,
 }
 
@@ -2378,6 +2504,7 @@ pub struct ExportAllDeclaration<'a> {
     pub source: StringLiteral<'a>,
     /// Will be `Some(vec![])` for empty assertion
     #[ts]
+    #[estree(rename = "attributes", via = crate::serialize::ImportExportWithClause(&self.with_clause), ts_type = "Array<ImportAttribute>")]
     pub with_clause: Option<Box<'a, WithClause<'a>>>, // Some(vec![]) for empty assertion
     #[ts]
     pub export_kind: ImportOrExportKind, // `export type *`

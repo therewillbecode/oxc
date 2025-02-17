@@ -202,7 +202,7 @@ pub fn check_simple_assignment_target<'a>(
     ctx: &SemanticBuilder<'a>,
 ) {
     if let Some(expression) = target.get_expression() {
-        #[allow(clippy::match_same_arms)]
+        #[expect(clippy::match_same_arms)]
         match expression.get_inner_expression() {
             Expression::Identifier(_) => {}
             match_member_expression!(Expression) => {}
@@ -286,7 +286,7 @@ pub fn check_ts_enum_declaration<'a>(decl: &TSEnumDeclaration<'a>, ctx: &Semanti
     let mut need_initializer = false;
 
     decl.members.iter().for_each(|member| {
-        #[allow(clippy::unnested_or_patterns)]
+        #[expect(clippy::unnested_or_patterns)]
         if let Some(initializer) = &member.initializer {
             need_initializer = !matches!(
                 initializer,
@@ -540,5 +540,21 @@ pub fn check_for_statement_left(left: &ForStatementLeft, is_for_in: bool, ctx: &
             let span = decl.id.span();
             ctx.error(type_annotation_in_for_left(span, is_for_in));
         }
+    }
+}
+
+fn invalid_jsx_attribute_value(span: Span) -> OxcDiagnostic {
+    ts_error("17000", "JSX attributes must only be assigned a non-empty 'expression'.")
+        .with_label(span)
+}
+
+pub fn check_jsx_expression_container(
+    container: &JSXExpressionContainer,
+    ctx: &SemanticBuilder<'_>,
+) {
+    if matches!(container.expression, JSXExpression::EmptyExpression(_))
+        && matches!(ctx.nodes.parent_kind(ctx.current_node_id), Some(AstKind::JSXAttributeItem(_)))
+    {
+        ctx.error(invalid_jsx_attribute_value(container.span()));
     }
 }

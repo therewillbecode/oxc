@@ -4,6 +4,72 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.51.0] - 2025-02-15
+
+- 21a9476 ast: [**BREAKING**] Remove `TSLiteral::RegExpLiteral` (#9056) (Dunqing)
+
+- 9091387 ast: [**BREAKING**] Remove `TSType::TSQualifiedName` (#9051) (Dunqing)
+
+### Features
+
+
+### Bug Fixes
+
+- 38f81af ast/estree: Order fields same as Acorn (#9128) (overlookmotel)
+- 67f8932 ast/estree: `CatchParameter` do not include `type` and `Span` twice (#9125) (overlookmotel)
+- 1b02fe0 ast/estree: `FormalParameter` do not include `Span` twice (#9124) (overlookmotel)
+- d3b5fb0 ast/estree: Fix TS type for `AssignmentTargetPropertyIdentifier` (#9092) (overlookmotel)
+- d8d80a9 ast/estree: Fix TS types for `BigIntLiteral` and `RegExpLiteral` (#9091) (overlookmotel)
+
+## [0.50.0] - 2025-02-12
+
+- d9189f1 ast: [**BREAKING**] Remove `PrivateInExpression::operator` field (#9041) (overlookmotel)
+
+### Bug Fixes
+
+- 22d93be ast: Estree compat `AssignmentTargetPropertyIdentifier` (#9006) (hi-ogawa)
+- cd2e199 ast/estree: Fix serializing `RegExpLiteral` (#9043) (overlookmotel)
+- f705c64 ast/estree: Serialize `PrivateInExpression` as `BinaryExpression` (#9033) (hi-ogawa)
+- 2948804 ast/estree: Fix `ExportAllDeclaration` attributes (#9032) (hi-ogawa)
+- 2371dd4 ast/estree: Fix serializing import and export `attributes` (#9030) (hi-ogawa)
+- e75e1d2 ast/estree: Fix serializing `PrivateFieldExpression` (#9025) (overlookmotel)
+- fcb5490 ast/estree: Fix serializing `ImportExpression`s (#9024) (overlookmotel)
+- 9427007 ast/estree: Use `#[estree(append_to)]` for `TSModuleBlock` (#9020) (overlookmotel)
+
+### Refactor
+
+- cb3240c ast/estree: Remove redundant `ts_type` (#9037) (hi-ogawa)
+
+## [0.49.0] - 2025-02-10
+
+### Features
+
+- 53ee053 ast: Improve TS type definitions for appended fields (#8882) (overlookmotel)
+
+### Bug Fixes
+
+- 1daa8fe ast: Estree compat `AssignmentTargetPropertyProperty` (#9005) (hi-ogawa)
+- e0646d7 ast: Estree compat `ArrayAssignmentTarget` (#8998) (hi-ogawa)
+- d7802a7 ast: Serialize `ArrowFunctionExpression.body: FunctionBody | Expression` (#8988) (Hiroshi Ogawa)
+- 7e6a537 ast: Include `directives` in `body` (#8981) (hi-ogawa)
+- ec1d593 ast: Add missing estree props for `ArrowFunctionExpression` (#8980) (camchenry)
+- 8eccdec ast: Estree compat `CatchClause` (#8975) (hi-ogawa)
+- 2ee1d6c ast: Estree compat `Property` (#8974) (hi-ogawa)
+- 801d78e ast: Estree compat `UnaryExpression` (#8973) (hi-ogawa)
+- a2883b1 ast: Estree compat `Function` (#8972) (hi-ogawa)
+- a520986 ast: Estree compat `Program.sourceType` (#8919) (Hiroshi Ogawa)
+- e30cf6a ast: Estree compat `MemberExpression` (#8921) (Hiroshi Ogawa)
+- 0c55dd6 ast: Serialize `Function.params` like estree (#8772) (Hiroshi Ogawa)
+
+### Refactor
+
+- 640db88 ast: Introduce `#[estree(ts_alias)]` attr and use it on `Elision` (#8939) (overlookmotel)
+- 66f0afb ast: Shorten TS type definitions for enums (#8938) (overlookmotel)
+- a6884e4 ast: Simplify serializing literal types (#8937) (overlookmotel)
+- c58f785 ast: Simplify serializing `SourceType` (#8936) (overlookmotel)
+- 223eb8d ast: Override TS type defs with `#[estree(custom_ts_def)]` attribute on type (#8897) (overlookmotel)
+- f6f92db ast: Re-order generated code (#8863) (overlookmotel)
+
 ## [0.47.0] - 2025-01-18
 
 - 19d3677 ast: [**BREAKING**] Always return `Array<ImportDeclarationSpecifier>` for `ImportDeclaration.specifiers` (#8560) (sapphi-red)

@@ -1,14 +1,12 @@
 // Auto-generated code, DO NOT EDIT DIRECTLY!
 // To edit this generated file you have to edit `tasks/ast_tools/src/derives/get_address.rs`
 
-#![allow(clippy::match_same_arms)]
+#![expect(clippy::match_same_arms)]
 
 use oxc_allocator::{Address, GetAddress};
 
 use crate::ast::js::*;
-
 use crate::ast::jsx::*;
-
 use crate::ast::ts::*;
 
 impl GetAddress for Expression<'_> {
@@ -524,6 +522,81 @@ impl GetAddress for ExportDefaultDeclarationKind<'_> {
     }
 }
 
+impl GetAddress for JSXElementName<'_> {
+    // `#[inline]` because compiler should boil this down to a single assembly instruction
+    #[inline]
+    fn address(&self) -> Address {
+        match self {
+            Self::Identifier(it) => GetAddress::address(it),
+            Self::IdentifierReference(it) => GetAddress::address(it),
+            Self::NamespacedName(it) => GetAddress::address(it),
+            Self::MemberExpression(it) => GetAddress::address(it),
+            Self::ThisExpression(it) => GetAddress::address(it),
+        }
+    }
+}
+
+impl GetAddress for JSXMemberExpressionObject<'_> {
+    // `#[inline]` because compiler should boil this down to a single assembly instruction
+    #[inline]
+    fn address(&self) -> Address {
+        match self {
+            Self::IdentifierReference(it) => GetAddress::address(it),
+            Self::MemberExpression(it) => GetAddress::address(it),
+            Self::ThisExpression(it) => GetAddress::address(it),
+        }
+    }
+}
+
+impl GetAddress for JSXAttributeItem<'_> {
+    // `#[inline]` because compiler should boil this down to a single assembly instruction
+    #[inline]
+    fn address(&self) -> Address {
+        match self {
+            Self::Attribute(it) => GetAddress::address(it),
+            Self::SpreadAttribute(it) => GetAddress::address(it),
+        }
+    }
+}
+
+impl GetAddress for JSXAttributeName<'_> {
+    // `#[inline]` because compiler should boil this down to a single assembly instruction
+    #[inline]
+    fn address(&self) -> Address {
+        match self {
+            Self::Identifier(it) => GetAddress::address(it),
+            Self::NamespacedName(it) => GetAddress::address(it),
+        }
+    }
+}
+
+impl GetAddress for JSXAttributeValue<'_> {
+    // `#[inline]` because compiler should boil this down to a single assembly instruction
+    #[inline]
+    fn address(&self) -> Address {
+        match self {
+            Self::StringLiteral(it) => GetAddress::address(it),
+            Self::ExpressionContainer(it) => GetAddress::address(it),
+            Self::Element(it) => GetAddress::address(it),
+            Self::Fragment(it) => GetAddress::address(it),
+        }
+    }
+}
+
+impl GetAddress for JSXChild<'_> {
+    // `#[inline]` because compiler should boil this down to a single assembly instruction
+    #[inline]
+    fn address(&self) -> Address {
+        match self {
+            Self::Text(it) => GetAddress::address(it),
+            Self::Element(it) => GetAddress::address(it),
+            Self::Fragment(it) => GetAddress::address(it),
+            Self::ExpressionContainer(it) => GetAddress::address(it),
+            Self::Spread(it) => GetAddress::address(it),
+        }
+    }
+}
+
 impl GetAddress for TSEnumMemberName<'_> {
     // `#[inline]` because compiler should boil this down to a single assembly instruction
     #[inline]
@@ -541,10 +614,8 @@ impl GetAddress for TSLiteral<'_> {
     fn address(&self) -> Address {
         match self {
             Self::BooleanLiteral(it) => GetAddress::address(it),
-            Self::NullLiteral(it) => GetAddress::address(it),
             Self::NumericLiteral(it) => GetAddress::address(it),
             Self::BigIntLiteral(it) => GetAddress::address(it),
-            Self::RegExpLiteral(it) => GetAddress::address(it),
             Self::StringLiteral(it) => GetAddress::address(it),
             Self::TemplateLiteral(it) => GetAddress::address(it),
             Self::UnaryExpression(it) => GetAddress::address(it),
@@ -581,7 +652,6 @@ impl GetAddress for TSType<'_> {
             Self::TSLiteralType(it) => GetAddress::address(it),
             Self::TSMappedType(it) => GetAddress::address(it),
             Self::TSNamedTupleMember(it) => GetAddress::address(it),
-            Self::TSQualifiedName(it) => GetAddress::address(it),
             Self::TSTemplateLiteralType(it) => GetAddress::address(it),
             Self::TSThisType(it) => GetAddress::address(it),
             Self::TSTupleType(it) => GetAddress::address(it),
@@ -630,7 +700,6 @@ impl GetAddress for TSTupleElement<'_> {
             Self::TSLiteralType(it) => GetAddress::address(it),
             Self::TSMappedType(it) => GetAddress::address(it),
             Self::TSNamedTupleMember(it) => GetAddress::address(it),
-            Self::TSQualifiedName(it) => GetAddress::address(it),
             Self::TSTemplateLiteralType(it) => GetAddress::address(it),
             Self::TSThisType(it) => GetAddress::address(it),
             Self::TSTupleType(it) => GetAddress::address(it),
@@ -704,81 +773,6 @@ impl GetAddress for TSModuleReference<'_> {
             Self::ExternalModuleReference(it) => GetAddress::address(it),
             Self::IdentifierReference(it) => GetAddress::address(it),
             Self::QualifiedName(it) => GetAddress::address(it),
-        }
-    }
-}
-
-impl GetAddress for JSXElementName<'_> {
-    // `#[inline]` because compiler should boil this down to a single assembly instruction
-    #[inline]
-    fn address(&self) -> Address {
-        match self {
-            Self::Identifier(it) => GetAddress::address(it),
-            Self::IdentifierReference(it) => GetAddress::address(it),
-            Self::NamespacedName(it) => GetAddress::address(it),
-            Self::MemberExpression(it) => GetAddress::address(it),
-            Self::ThisExpression(it) => GetAddress::address(it),
-        }
-    }
-}
-
-impl GetAddress for JSXMemberExpressionObject<'_> {
-    // `#[inline]` because compiler should boil this down to a single assembly instruction
-    #[inline]
-    fn address(&self) -> Address {
-        match self {
-            Self::IdentifierReference(it) => GetAddress::address(it),
-            Self::MemberExpression(it) => GetAddress::address(it),
-            Self::ThisExpression(it) => GetAddress::address(it),
-        }
-    }
-}
-
-impl GetAddress for JSXAttributeItem<'_> {
-    // `#[inline]` because compiler should boil this down to a single assembly instruction
-    #[inline]
-    fn address(&self) -> Address {
-        match self {
-            Self::Attribute(it) => GetAddress::address(it),
-            Self::SpreadAttribute(it) => GetAddress::address(it),
-        }
-    }
-}
-
-impl GetAddress for JSXAttributeName<'_> {
-    // `#[inline]` because compiler should boil this down to a single assembly instruction
-    #[inline]
-    fn address(&self) -> Address {
-        match self {
-            Self::Identifier(it) => GetAddress::address(it),
-            Self::NamespacedName(it) => GetAddress::address(it),
-        }
-    }
-}
-
-impl GetAddress for JSXAttributeValue<'_> {
-    // `#[inline]` because compiler should boil this down to a single assembly instruction
-    #[inline]
-    fn address(&self) -> Address {
-        match self {
-            Self::StringLiteral(it) => GetAddress::address(it),
-            Self::ExpressionContainer(it) => GetAddress::address(it),
-            Self::Element(it) => GetAddress::address(it),
-            Self::Fragment(it) => GetAddress::address(it),
-        }
-    }
-}
-
-impl GetAddress for JSXChild<'_> {
-    // `#[inline]` because compiler should boil this down to a single assembly instruction
-    #[inline]
-    fn address(&self) -> Address {
-        match self {
-            Self::Text(it) => GetAddress::address(it),
-            Self::Element(it) => GetAddress::address(it),
-            Self::Fragment(it) => GetAddress::address(it),
-            Self::ExpressionContainer(it) => GetAddress::address(it),
-            Self::Spread(it) => GetAddress::address(it),
         }
     }
 }

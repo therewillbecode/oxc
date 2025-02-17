@@ -4,6 +4,23 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.51.0] - 2025-02-15
+
+### Features
+
+- fef82ff transformer/helper-loader: Replace `@babel/runtime` with `@oxc-project/runtime` (#9059) (Dunqing)
+
+## [0.49.0] - 2025-02-10
+
+### Features
+
+- d6daa75 napi/transform: Support for enabling legacy decorator (#8927) (Dunqing)
+- f2d28f3 transformer: Support for transforming legacy decorator (#8614) (Dunqing)
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
 ## [0.46.0] - 2025-01-14
 
 ### Features

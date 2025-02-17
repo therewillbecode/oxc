@@ -4,6 +4,158 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.51.0] - 2025-02-15
+
+- 21a9476 ast: [**BREAKING**] Remove `TSLiteral::RegExpLiteral` (#9056) (Dunqing)
+
+- 9091387 ast: [**BREAKING**] Remove `TSType::TSQualifiedName` (#9051) (Dunqing)
+
+### Features
+
+
+### Bug Fixes
+
+- 38f81af ast/estree: Order fields same as Acorn (#9128) (overlookmotel)
+- 67f8932 ast/estree: `CatchParameter` do not include `type` and `Span` twice (#9125) (overlookmotel)
+- 1b02fe0 ast/estree: `FormalParameter` do not include `Span` twice (#9124) (overlookmotel)
+- d3b5fb0 ast/estree: Fix TS type for `AssignmentTargetPropertyIdentifier` (#9092) (overlookmotel)
+- d8d80a9 ast/estree: Fix TS types for `BigIntLiteral` and `RegExpLiteral` (#9091) (overlookmotel)
+- 15f23f1 napi/parser: Utf16 span for module record (#9093) (hi-ogawa)
+- 9edfb1d napi/parser: Fix unicode comment panic (#9084) (hi-ogawa)
+
+### Documentation
+
+- 896d770 ast: Add missing docs and fix broken code for assignment targets (#9095) (camchenry)
+
+### Refactor
+
+- 08b2d80 ast/estree: Define TS types for extra fields on converters (#9118) (overlookmotel)
+- 6c5a435 ast/estree: Define types for `#[estree(add_fields)]` converters (#9116) (overlookmotel)
+
+## [0.50.0] - 2025-02-12
+
+- d9189f1 ast: [**BREAKING**] Remove `PrivateInExpression::operator` field (#9041) (overlookmotel)
+
+### Bug Fixes
+
+- 22d93be ast: Estree compat `AssignmentTargetPropertyIdentifier` (#9006) (hi-ogawa)
+- cd2e199 ast/estree: Fix serializing `RegExpLiteral` (#9043) (overlookmotel)
+- f705c64 ast/estree: Serialize `PrivateInExpression` as `BinaryExpression` (#9033) (hi-ogawa)
+- 2948804 ast/estree: Fix `ExportAllDeclaration` attributes (#9032) (hi-ogawa)
+- 2371dd4 ast/estree: Fix serializing import and export `attributes` (#9030) (hi-ogawa)
+- 2b47299 ast/estree: Fix serializing `RegExpLiteral` flags (#9027) (overlookmotel)
+- e75e1d2 ast/estree: Fix serializing `PrivateFieldExpression` (#9025) (overlookmotel)
+- fcb5490 ast/estree: Fix serializing `ImportExpression`s (#9024) (overlookmotel)
+- cac5545 ast/estree: Fix serializing `BigInt`s (#9022) (overlookmotel)
+- 9427007 ast/estree: Use `#[estree(append_to)]` for `TSModuleBlock` (#9020) (overlookmotel)
+
+### Documentation
+
+- 11829bf ast: Improve and reformat doc comments (#9017) (overlookmotel)
+
+### Refactor
+
+- cb3240c ast/estree: Remove redundant `ts_type` (#9037) (hi-ogawa)
+- eef8874 ast/estree: Re-arrange and comment custom serialization code (#9019) (overlookmotel)
+- 8db4727 ast/estree: Remove serialization wrapper (#9018) (overlookmotel)
+
+### Styling
+
+- 50a87c2 ast: Reformat `#[estree]` attribute (#9016) (overlookmotel)
+
+## [0.49.0] - 2025-02-10
+
+- bbb075d ast: [**BREAKING**] Name `AstBuilder` enum builders after variant name not type name (#8890) (overlookmotel)
+
+- b7ff7e1 span: [**BREAKING**] Export `ContentEq` trait from root of `oxc_span` crate (#8869) (overlookmotel)
+
+### Features
+
+- c940826 ast_tools: Get extra params for visitor methods from `#[visit(args)]` attr (#8887) (overlookmotel)
+- f2d28f3 transformer: Support for transforming legacy decorator (#8614) (Dunqing)
+
+### Bug Fixes
+
+- 1daa8fe ast: Estree compat `AssignmentTargetPropertyProperty` (#9005) (hi-ogawa)
+- e0646d7 ast: Estree compat `ArrayAssignmentTarget` (#8998) (hi-ogawa)
+- d7802a7 ast: Serialize `ArrowFunctionExpression.body: FunctionBody | Expression` (#8988) (Hiroshi Ogawa)
+- 7e6a537 ast: Include `directives` in `body` (#8981) (hi-ogawa)
+- ec1d593 ast: Add missing estree props for `ArrowFunctionExpression` (#8980) (camchenry)
+- 8eccdec ast: Estree compat `CatchClause` (#8975) (hi-ogawa)
+- 2ee1d6c ast: Estree compat `Property` (#8974) (hi-ogawa)
+- 801d78e ast: Estree compat `UnaryExpression` (#8973) (hi-ogawa)
+- a2883b1 ast: Estree compat `Function` (#8972) (hi-ogawa)
+- a520986 ast: Estree compat `Program.sourceType` (#8919) (Hiroshi Ogawa)
+- e30cf6a ast: Estree compat `MemberExpression` (#8921) (Hiroshi Ogawa)
+- 315fec6 ast: Fix lifetimes on custom `Serialize` impls (#8899) (overlookmotel)
+- 0c55dd6 ast: Serialize `Function.params` like estree (#8772) (Hiroshi Ogawa)
+- 9a5a926 ecmascript: Fix may_have_side_effects for binary expressions (#8991) (sapphi-red)
+
+### Performance
+
+- fcfc274 ast: Assume `serde_json` output is valid UTF8 string (#8928) (overlookmotel)
+
+### Documentation
+
+- 705208b ast: Do not include `r#` prefix in doc comments for `AstBuilder` methods (#8873) (overlookmotel)
+
+### Refactor
+
+- 0929320 ast: Add `NULL` value for serializing null types (#8987) (camchenry)
+- a1ca2eb ast: Support `#[estree(ts_alias)]` attr on enums and use it on `RegExpPattern` and `RegExpFlags` (#8953) (overlookmotel)
+- 515eb52 ast: Shorten code for `impl Serialize for Elision` (#8940) (overlookmotel)
+- 640db88 ast: Introduce `#[estree(ts_alias)]` attr and use it on `Elision` (#8939) (overlookmotel)
+- a6884e4 ast: Simplify serializing literal types (#8937) (overlookmotel)
+- c58f785 ast: Simplify serializing `SourceType` (#8936) (overlookmotel)
+- 647a288 ast: Rename `#[estree(add_entry)]` to `#[estree(add_fields)]` (#8926) (overlookmotel)
+- cbb4e9c ast: Generated `Serialize` impls flatten struct fields (#8904) (overlookmotel)
+- 5cb8466 ast: Estree `via` on struct fields implement `From` (#8898) (overlookmotel)
+- 223eb8d ast: Override TS type defs with `#[estree(custom_ts_def)]` attribute on type (#8897) (overlookmotel)
+- a36bc5f ast: Generate `Visit` methods in order of type definitions (#8891) (overlookmotel)
+- 893339d ast: Record plural names in `#[plural]` attr (#8889) (overlookmotel)
+- 5f5188c ast: Shorten generated code for `GetSpan` (#8883) (overlookmotel)
+- 571fb70 ast: Derive `ContentEq` on literal types (#8880) (overlookmotel)
+- 04786ac ast: Use `=` syntax for `#[scope]` attrs (#8878) (overlookmotel)
+- 6628e1d ast: Move `#[estree(skip)]` to types (#8877) (overlookmotel)
+- 3407d47 ast: Move `#[clone_in(default)]` to types (#8876) (overlookmotel)
+- 6839433 ast: Communicate type of `RegExpFlags` to `oxc_ast_tools` with alias type (#8868) (overlookmotel)
+- abfe5bf ast: Shorten generated code for numbers (#8864) (overlookmotel)
+- f6f92db ast: Re-order generated code (#8863) (overlookmotel)
+- f69de07 ast: Remove unneeded lint attrs from generated code (#8862) (overlookmotel)
+- 6d1e1d8 ast: Make generated code consistent (#8872) (overlookmotel)
+- a5bdf32 ast_tools: Re-vamp `oxc_ast_tools` (#8844) (overlookmotel)
+- 768ad4f syntax: Add `#[ast]` attr to semantic ID types (#8867) (overlookmotel)
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
+## [0.48.2] - 2025-02-02
+
+### Features
+
+- d553318 minifier: Complete `MangleIf` (#8810) (Boshen)
+- e353a01 minifier: Compress `a != null ? a.b : undefined` to `a?.b` (#8802) (sapphi-red)
+
+### Documentation
+
+- 57b7ca8 ast: Add documentation for all remaining JS AST methods (#8820) (Cam McHenry)
+- b00b8c8 ast: Correct documentation for `JSXExpression::EmptyExpression`  (#8816) (Dunqing)
+- c63291a ast: Add more docs for JS expressions, declarations, and module AST types (#8800) (Cam McHenry)
+- fb5b1fa ast: Reformat `AstBuilder` doc comments (#8774) (overlookmotel)
+
+### Refactor
+
+- 0568210 ast: Remove excess line breaks from generated code (#8830) (overlookmotel)
+- 30eec26 ast: Make generated code for `Visit` more understandable (#8825) (overlookmotel)
+- d4eee50 ast: Comments for enums with no `AstKind` in generated code for `Visit` trait (#8796) (overlookmotel)
+- 87a7711 ast: Shorten generated code for `VisitMut` (#8795) (overlookmotel)
+- 70ad879 ast: Remove unnecessary lint from generated code for `AstKind` (#8794) (overlookmotel)
+- beeda9a ast: Alter comments in generated `Visit` trait (#8793) (overlookmotel)
+- 8cf9d34 ast: Rename `#[estree(type)]` attr on struct fields to `#[estree(ts_type)]` (#8767) (overlookmotel)
+- a316b10 ast: Rename `#[estree(type)]` attr on types to `#[estree(rename)]` (#8766) (overlookmotel)
+- a861d93 minifier: Port esbuild's `mangleStmts` (#8770) (Boshen)
+
 ## [0.48.1] - 2025-01-26
 
 ### Features

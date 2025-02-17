@@ -14,7 +14,7 @@ use crate::{
 };
 
 impl<'a> IsolatedDeclarations<'a> {
-    #[allow(clippy::unused_self)]
+    #[expect(clippy::unused_self)]
     pub(crate) fn is_literal_key(&self, key: &PropertyKey<'a>) -> bool {
         match key {
             PropertyKey::StringLiteral(_)
@@ -63,7 +63,7 @@ impl<'a> IsolatedDeclarations<'a> {
         }
     }
 
-    #[allow(clippy::unused_self)]
+    #[expect(clippy::unused_self)]
     pub(crate) fn transform_accessibility(
         &self,
         accessibility: Option<TSAccessibility>,
@@ -199,11 +199,11 @@ impl<'a> IsolatedDeclarations<'a> {
         param: &FormalParameter<'a>,
         type_annotation: Option<Box<'a, TSTypeAnnotation<'a>>>,
     ) -> Option<ClassElement<'a>> {
-        let Some(ident_name) = param.pattern.get_identifier() else {
+        let Some(ident_name) = param.pattern.get_identifier_name() else {
             // A parameter property may not be declared using a binding pattern.(1187)
             return None;
         };
-        let key = self.ast.property_key_identifier_name(SPAN, ident_name);
+        let key = self.ast.property_key_static_identifier(SPAN, ident_name);
         Some(self.ast.class_element_property_definition(
             param.span,
             PropertyDefinitionType::PropertyDefinition,
@@ -504,6 +504,11 @@ impl<'a> IsolatedDeclarations<'a> {
                         continue;
                     }
 
+                    let type_annotation = match property.accessibility {
+                        Some(TSAccessibility::Private) => None,
+                        _ => property.type_annotation.clone_in(self.ast.allocator),
+                    };
+
                     // FIXME: missing many fields
                     let new_element = self.ast.class_element_accessor_property(
                         property.span,
@@ -514,7 +519,7 @@ impl<'a> IsolatedDeclarations<'a> {
                         property.computed,
                         property.r#static,
                         property.definite,
-                        property.type_annotation.clone_in(self.ast.allocator),
+                        type_annotation,
                         property.accessibility,
                     );
                     elements.push(new_element);

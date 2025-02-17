@@ -263,7 +263,6 @@ pub trait CompilerInterface {
         self.after_isolated_declarations(ret);
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn transform<'a>(
         &self,
         options: &TransformOptions,
@@ -286,7 +285,7 @@ pub trait CompilerInterface {
         Compressor::new(allocator, options).build(program);
     }
 
-    fn mangle(&self, program: &mut Program<'_>, options: MangleOptions) -> Mangler {
+    fn mangle(&self, program: &mut Program<'_>, options: MangleOptions) -> SymbolTable {
         Mangler::new().with_options(options).build(program)
     }
 
@@ -294,13 +293,13 @@ pub trait CompilerInterface {
         &self,
         program: &Program<'_>,
         source_path: &Path,
-        mangler: Option<Mangler>,
+        symbol_table: Option<SymbolTable>,
         options: CodegenOptions,
     ) -> CodegenReturn {
         let mut options = options;
         if self.enable_sourcemap() {
             options.source_map_path = Some(source_path.to_path_buf());
         }
-        CodeGenerator::new().with_options(options).with_mangler(mangler).build(program)
+        CodeGenerator::new().with_options(options).with_symbol_table(symbol_table).build(program)
     }
 }

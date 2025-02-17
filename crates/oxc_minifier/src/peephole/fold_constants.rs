@@ -1,20 +1,17 @@
 use oxc_ast::ast::*;
 use oxc_ecmascript::{
-    constant_evaluation::{ConstantEvaluation, ConstantValue, ValueType},
+    constant_evaluation::{ConstantEvaluation, ConstantValue, DetermineValueType, ValueType},
     side_effects::MayHaveSideEffects,
 };
 use oxc_span::GetSpan;
-use oxc_syntax::{
-    number::NumberBase,
-    operator::{BinaryOperator, LogicalOperator},
-};
+use oxc_syntax::operator::{BinaryOperator, LogicalOperator};
 use oxc_traverse::Ancestor;
 
 use crate::ctx::Ctx;
 
 use super::PeepholeOptimizations;
 
-impl<'a, 'b> PeepholeOptimizations {
+impl<'a> PeepholeOptimizations {
     /// Constant Folding
     ///
     /// <https://github.com/google/closure-compiler/blob/v20240609/src/com/google/javascript/jscomp/PeepholeFoldConstants.java>
@@ -37,7 +34,7 @@ impl<'a, 'b> PeepholeOptimizations {
     }
 
     #[expect(clippy::float_cmp)]
-    fn try_fold_unary_expr(e: &UnaryExpression<'a>, ctx: Ctx<'a, 'b>) -> Option<Expression<'a>> {
+    fn try_fold_unary_expr(e: &UnaryExpression<'a>, ctx: Ctx<'a, '_>) -> Option<Expression<'a>> {
         match e.operator {
             // Do not fold `void 0` back to `undefined`.
             UnaryOperator::Void if e.argument.is_number_0() => None,
@@ -47,29 +44,29 @@ impl<'a, 'b> PeepholeOptimizations {
             }
             // Do not fold big int.
             UnaryOperator::UnaryNegation if e.argument.is_big_int_literal() => None,
-            _ => ctx.eval_unary_expression(e).map(|v| ctx.value_to_expr(e.span, v)),
+            _ => e.evaluate_value(&ctx).map(|v| ctx.value_to_expr(e.span, v)),
         }
     }
 
     fn try_fold_static_member_expr(
         e: &mut StaticMemberExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         // TODO: tryFoldObjectPropAccess(n, left, name)
-        ctx.eval_static_member_expression(e).map(|value| ctx.value_to_expr(e.span, value))
+        e.evaluate_value(&ctx).map(|value| ctx.value_to_expr(e.span, value))
     }
 
     fn try_fold_computed_member_expr(
         e: &mut ComputedMemberExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         // TODO: tryFoldObjectPropAccess(n, left, name)
-        ctx.eval_computed_member_expression(e).map(|value| ctx.value_to_expr(e.span, value))
+        e.evaluate_value(&ctx).map(|value| ctx.value_to_expr(e.span, value))
     }
 
     fn try_fold_logical_expr(
         logical_expr: &mut LogicalExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         match logical_expr.operator {
             LogicalOperator::And | LogicalOperator::Or => Self::try_fold_and_or(logical_expr, ctx),
@@ -79,14 +76,14 @@ impl<'a, 'b> PeepholeOptimizations {
 
     fn try_fold_optional_chain(
         chain_expr: &mut ChainExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         let member_expr = chain_expr.expression.as_member_expression()?;
         if !member_expr.optional() {
             return None;
         }
         let object = member_expr.object();
-        let ty = ValueType::from(object);
+        let ty = object.value_type(&ctx);
         (ty.is_null() || ty.is_undefined())
             .then(|| ctx.value_to_expr(chain_expr.span, ConstantValue::Undefined))
     }
@@ -96,31 +93,20 @@ impl<'a, 'b> PeepholeOptimizations {
     /// port from [closure-compiler](https://github.com/google/closure-compiler/blob/09094b551915a6487a980a783831cba58b5739d1/src/com/google/javascript/jscomp/PeepholeFoldConstants.java#L587)
     pub fn try_fold_and_or(
         logical_expr: &mut LogicalExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         let op = logical_expr.operator;
         debug_assert!(matches!(op, LogicalOperator::And | LogicalOperator::Or));
 
         let left = &logical_expr.left;
-        let left_val = ctx.get_boolean_value(left);
+        let left_val = left.evaluate_value_to_boolean(&ctx);
 
         if let Some(lval) = left_val {
-            // Bail `0 && (module.exports = {})` for `cjs-module-lexer`.
-            if !lval {
-                if let Expression::AssignmentExpression(assign_expr) = &logical_expr.right {
-                    if let Some(member_expr) = assign_expr.left.as_member_expression() {
-                        if member_expr.is_specific_member_access("module", "exports") {
-                            return None;
-                        }
-                    }
-                }
-            }
-
             // (TRUE || x) => TRUE (also, (3 || x) => 3)
             // (FALSE && x) => FALSE
-            if if lval { op == LogicalOperator::Or } else { op == LogicalOperator::And } {
+            if if lval { op.is_or() } else { op.is_and() } {
                 return Some(ctx.ast.move_expression(&mut logical_expr.left));
-            } else if !ctx.expression_may_have_side_efffects(left) {
+            } else if !left.may_have_side_effects(&ctx) {
                 let parent = ctx.ancestry.parent();
                 // Bail `let o = { f() { assert.ok(this !== o); } }; (true && o.f)(); (true && o.f)``;`
                 if parent.is_tagged_template_expression()
@@ -142,14 +128,14 @@ impl<'a, 'b> PeepholeOptimizations {
             return Some(sequence_expr);
         } else if let Expression::LogicalExpression(left_child) = &mut logical_expr.left {
             if left_child.operator == logical_expr.operator {
-                let left_child_right_boolean = ctx.get_boolean_value(&left_child.right);
+                let left_child_right_boolean = left_child.right.evaluate_value_to_boolean(&ctx);
                 let left_child_op = left_child.operator;
                 if let Some(right_boolean) = left_child_right_boolean {
-                    if !ctx.expression_may_have_side_efffects(&left_child.right) {
+                    if !left_child.right.may_have_side_effects(&ctx) {
                         // a || false || b => a || b
                         // a && true && b => a && b
-                        if !right_boolean && left_child_op == LogicalOperator::Or
-                            || right_boolean && left_child_op == LogicalOperator::And
+                        if !right_boolean && left_child_op.is_or()
+                            || right_boolean && left_child_op.is_and()
                         {
                             let left = ctx.ast.move_expression(&mut left_child.left);
                             let right = ctx.ast.move_expression(&mut logical_expr.right);
@@ -171,14 +157,14 @@ impl<'a, 'b> PeepholeOptimizations {
     /// Try to fold a nullish coalesce `foo ?? bar`.
     pub fn try_fold_coalesce(
         logical_expr: &mut LogicalExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         debug_assert_eq!(logical_expr.operator, LogicalOperator::Coalesce);
         let left = &logical_expr.left;
-        let left_val = ValueType::from(left);
+        let left_val = left.value_type(&ctx);
         match left_val {
             ValueType::Null | ValueType::Undefined => {
-                Some(if ctx.expression_may_have_side_efffects(left) {
+                Some(if left.may_have_side_effects(&ctx) {
                     // e.g. `(a(), null) ?? 1` => `(a(), null, 1)`
                     let expressions = ctx.ast.vec_from_array([
                         ctx.ast.move_expression(&mut logical_expr.left),
@@ -214,7 +200,7 @@ impl<'a, 'b> PeepholeOptimizations {
     #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn try_fold_binary_expr(
         e: &mut BinaryExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         // TODO: tryReduceOperandsForOp
 
@@ -229,7 +215,9 @@ impl<'a, 'b> PeepholeOptimizations {
             | BinaryOperator::LessThan
             | BinaryOperator::GreaterThan
             | BinaryOperator::LessEqualThan
-            | BinaryOperator::GreaterEqualThan => Self::try_fold_comparison(e, ctx),
+            | BinaryOperator::GreaterEqualThan
+            | BinaryOperator::ShiftRight
+            | BinaryOperator::Instanceof => ctx.eval_binary(e),
             BinaryOperator::BitwiseAnd | BinaryOperator::BitwiseOR | BinaryOperator::BitwiseXOR => {
                 ctx.eval_binary(e).or_else(|| Self::try_fold_left_child_op(e, ctx))
             }
@@ -266,7 +254,7 @@ impl<'a, 'b> PeepholeOptimizations {
                 .and_then(|_| ctx.eval_binary(e)),
             BinaryOperator::ShiftLeft => {
                 if let Some((left, right)) = Self::extract_numeric_values(e) {
-                    let result = ctx.eval_binary_expression(e)?.into_number()?;
+                    let result = e.evaluate_value(&ctx)?.into_number()?;
                     let left_len = Self::approximate_printed_int_char_count(left);
                     let right_len = Self::approximate_printed_int_char_count(right);
                     let result_len = Self::approximate_printed_int_char_count(result);
@@ -278,7 +266,7 @@ impl<'a, 'b> PeepholeOptimizations {
             }
             BinaryOperator::ShiftRightZeroFill => {
                 if let Some((left, right)) = Self::extract_numeric_values(e) {
-                    let result = ctx.eval_binary_expression(e)?.into_number()?;
+                    let result = e.evaluate_value(&ctx)?.into_number()?;
                     let left_len = Self::approximate_printed_int_char_count(left);
                     let right_len = Self::approximate_printed_int_char_count(right);
                     let result_len = Self::approximate_printed_int_char_count(result);
@@ -288,7 +276,6 @@ impl<'a, 'b> PeepholeOptimizations {
                 }
                 None
             }
-            BinaryOperator::ShiftRight | BinaryOperator::Instanceof => ctx.eval_binary(e),
             BinaryOperator::In => None,
         }
     }
@@ -311,17 +298,21 @@ impl<'a, 'b> PeepholeOptimizations {
     }
 
     // Simplified version of `tryFoldAdd` from closure compiler.
-    fn try_fold_add(e: &mut BinaryExpression<'a>, ctx: Ctx<'a, 'b>) -> Option<Expression<'a>> {
-        if let Some(v) = ctx.eval_binary_expression(e) {
+    fn try_fold_add(e: &mut BinaryExpression<'a>, ctx: Ctx<'a, '_>) -> Option<Expression<'a>> {
+        if let Some(v) = e.evaluate_value(&ctx) {
             return Some(ctx.value_to_expr(e.span, v));
         }
         debug_assert_eq!(e.operator, BinaryOperator::Addition);
+
         // a + 'b' + 'c' -> a + 'bc'
         if let Expression::BinaryExpression(left_binary_expr) = &mut e.left {
-            if let Expression::StringLiteral(left_str) = &left_binary_expr.right {
-                if let Expression::StringLiteral(right_str) = &e.right {
-                    let span = Span::new(left_str.span.start, right_str.span.end);
-                    let value = left_str.value.to_string() + right_str.value.as_str();
+            if left_binary_expr.right.value_type(&ctx).is_string() {
+                if let (Some(left_str), Some(right_str)) = (
+                    left_binary_expr.right.get_side_free_string_value(&ctx),
+                    e.right.get_side_free_string_value(&ctx),
+                ) {
+                    let span = Span::new(left_binary_expr.right.span().start, e.right.span().end);
+                    let value = left_str.into_owned() + &right_str;
                     let right = ctx.ast.expression_string_literal(span, value, None);
                     let left = ctx.ast.move_expression(&mut left_binary_expr.left);
                     return Some(ctx.ast.expression_binary(e.span, left, e.operator, right));
@@ -329,15 +320,11 @@ impl<'a, 'b> PeepholeOptimizations {
             }
         }
 
-        // typeof foo + ""
-        if let Expression::UnaryExpression(left) = &e.left {
-            if left.operator.is_typeof() {
-                if let Expression::StringLiteral(right) = &e.right {
-                    if right.value.is_empty() {
-                        return Some(ctx.ast.move_expression(&mut e.left));
-                    }
-                }
-            }
+        // remove useless `+ ""` (e.g. `typeof foo + ""` -> `typeof foo`)
+        if e.left.is_specific_string_literal("") && e.right.value_type(&ctx).is_string() {
+            return Some(ctx.ast.move_expression(&mut e.right));
+        } else if e.right.is_specific_string_literal("") && e.left.value_type(&ctx).is_string() {
+            return Some(ctx.ast.move_expression(&mut e.left));
         }
 
         None
@@ -377,188 +364,9 @@ impl<'a, 'b> PeepholeOptimizations {
         ))
     }
 
-    fn try_fold_comparison(e: &BinaryExpression<'a>, ctx: Ctx<'a, 'b>) -> Option<Expression<'a>> {
-        let left = &e.left;
-        let right = &e.right;
-        let op = e.operator;
-        if ctx.expression_may_have_side_efffects(left)
-            || ctx.expression_may_have_side_efffects(right)
-        {
-            return None;
-        }
-        let value = match op {
-            BinaryOperator::LessThan
-            | BinaryOperator::GreaterThan
-            | BinaryOperator::LessEqualThan
-            | BinaryOperator::GreaterEqualThan => {
-                return ctx.eval_binary_expression(e).map(|v| ctx.value_to_expr(e.span, v));
-            }
-            BinaryOperator::Equality => Self::try_abstract_equality_comparison(left, right, ctx),
-            BinaryOperator::Inequality => {
-                Self::try_abstract_equality_comparison(left, right, ctx).map(|b| !b)
-            }
-            BinaryOperator::StrictEquality => {
-                Self::try_strict_equality_comparison(left, right, ctx)
-            }
-            BinaryOperator::StrictInequality => {
-                Self::try_strict_equality_comparison(left, right, ctx).map(|b| !b)
-            }
-            _ => None,
-        };
-        let value = match value {
-            Some(true) => true,
-            Some(false) => false,
-            None => return None,
-        };
-        Some(ctx.ast.expression_boolean_literal(e.span, value))
-    }
-
-    /// <https://tc39.es/ecma262/#sec-abstract-equality-comparison>
-    fn try_abstract_equality_comparison(
-        left_expr: &'b Expression<'a>,
-        right_expr: &'b Expression<'a>,
-        ctx: Ctx<'a, 'b>,
-    ) -> Option<bool> {
-        let left = ValueType::from(left_expr);
-        let right = ValueType::from(right_expr);
-        if left != ValueType::Undetermined && right != ValueType::Undetermined {
-            if left == right {
-                return Self::try_strict_equality_comparison(left_expr, right_expr, ctx);
-            }
-            if matches!(
-                (left, right),
-                (ValueType::Null, ValueType::Undefined) | (ValueType::Undefined, ValueType::Null)
-            ) {
-                return Some(true);
-            }
-
-            if matches!((left, right), (ValueType::Number, ValueType::String))
-                || matches!(right, ValueType::Boolean)
-            {
-                let right_number = ctx.get_side_free_number_value(right_expr);
-
-                if let Some(num) = right_number {
-                    let number_literal_expr = ctx.ast.expression_numeric_literal(
-                        right_expr.span(),
-                        num,
-                        None,
-                        if num.fract() == 0.0 { NumberBase::Decimal } else { NumberBase::Float },
-                    );
-
-                    return Self::try_abstract_equality_comparison(
-                        left_expr,
-                        &number_literal_expr,
-                        ctx,
-                    );
-                }
-
-                return None;
-            }
-
-            if matches!((left, right), (ValueType::String, ValueType::Number))
-                || matches!(left, ValueType::Boolean)
-            {
-                let left_number = ctx.get_side_free_number_value(left_expr);
-
-                if let Some(num) = left_number {
-                    let number_literal_expr = ctx.ast.expression_numeric_literal(
-                        left_expr.span(),
-                        num,
-                        None,
-                        if num.fract() == 0.0 { NumberBase::Decimal } else { NumberBase::Float },
-                    );
-
-                    return Self::try_abstract_equality_comparison(
-                        &number_literal_expr,
-                        right_expr,
-                        ctx,
-                    );
-                }
-
-                return None;
-            }
-
-            if matches!(left, ValueType::BigInt) || matches!(right, ValueType::BigInt) {
-                let left_bigint = ctx.get_side_free_bigint_value(left_expr);
-                let right_bigint = ctx.get_side_free_bigint_value(right_expr);
-
-                if let (Some(l_big), Some(r_big)) = (left_bigint, right_bigint) {
-                    return Some(l_big.eq(&r_big));
-                }
-            }
-
-            if matches!(left, ValueType::String | ValueType::Number | ValueType::BigInt)
-                && matches!(right, ValueType::Object)
-            {
-                return None;
-            }
-
-            if matches!(left, ValueType::Object)
-                && matches!(right, ValueType::String | ValueType::Number | ValueType::BigInt)
-            {
-                return None;
-            }
-
-            return Some(false);
-        }
-        None
-    }
-
-    /// <https://tc39.es/ecma262/#sec-strict-equality-comparison>
-    #[expect(clippy::float_cmp)]
-    fn try_strict_equality_comparison(
-        left_expr: &'b Expression<'a>,
-        right_expr: &'b Expression<'a>,
-        ctx: Ctx<'a, 'b>,
-    ) -> Option<bool> {
-        let left = ValueType::from(left_expr);
-        let right = ValueType::from(right_expr);
-        if !left.is_undetermined() && !right.is_undetermined() {
-            // Strict equality can only be true for values of the same type.
-            if left != right {
-                return Some(false);
-            }
-            return match left {
-                ValueType::Number => {
-                    let lnum = ctx.get_side_free_number_value(left_expr)?;
-                    let rnum = ctx.get_side_free_number_value(right_expr)?;
-                    if lnum.is_nan() || rnum.is_nan() {
-                        return Some(false);
-                    }
-                    Some(lnum == rnum)
-                }
-                ValueType::String => {
-                    let left = ctx.get_side_free_string_value(left_expr)?;
-                    let right = ctx.get_side_free_string_value(right_expr)?;
-                    Some(left == right)
-                }
-                ValueType::Undefined | ValueType::Null => Some(true),
-                ValueType::Boolean if right.is_boolean() => {
-                    let left = ctx.get_boolean_value(left_expr)?;
-                    let right = ctx.get_boolean_value(right_expr)?;
-                    Some(left == right)
-                }
-                ValueType::BigInt => {
-                    let left = ctx.get_side_free_bigint_value(left_expr)?;
-                    let right = ctx.get_side_free_bigint_value(right_expr)?;
-                    Some(left == right)
-                }
-                ValueType::Object | ValueType::Boolean | ValueType::Undetermined => None,
-            };
-        }
-
-        // Then, try to evaluate based on the value of the expression.
-        // There's only one special case:
-        // Any strict equality comparison against NaN returns false.
-        if left_expr.is_nan() || right_expr.is_nan() {
-            return Some(false);
-        }
-        None
-    }
-
     fn try_fold_number_constructor(
         e: &CallExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         let Expression::Identifier(ident) = &e.callee else { return None };
         if ident.name != "Number" {
@@ -584,7 +392,7 @@ impl<'a, 'b> PeepholeOptimizations {
             // `Number("1")` -> `+"1"` -> `1`
             Expression::StringLiteral(n) => {
                 let argument = ctx.ast.expression_string_literal(n.span, n.value, n.raw);
-                if let Some(n) = ctx.eval_to_number(&argument) {
+                if let Some(n) = argument.evaluate_value_to_number(&ctx) {
                     n
                 } else {
                     return Some(ctx.ast.expression_unary(
@@ -602,9 +410,8 @@ impl<'a, 'b> PeepholeOptimizations {
 
     fn try_fold_binary_typeof_comparison(
         bin_expr: &mut BinaryExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
-        // `typeof a === typeof b` -> `typeof a == typeof b`, `typeof a != typeof b` -> `typeof a != typeof b`,
         // `typeof a == typeof a` -> `true`, `typeof a != typeof a` -> `false`
         if bin_expr.operator.is_equality() {
             if let (Expression::UnaryExpression(left), Expression::UnaryExpression(right)) =
@@ -626,22 +433,6 @@ impl<'a, 'b> PeepholeOptimizations {
                             ));
                         }
                     }
-
-                    if matches!(
-                        bin_expr.operator,
-                        BinaryOperator::StrictEquality | BinaryOperator::StrictInequality
-                    ) {
-                        return Some(ctx.ast.expression_binary(
-                            bin_expr.span,
-                            ctx.ast.move_expression(&mut bin_expr.left),
-                            if bin_expr.operator == BinaryOperator::StrictEquality {
-                                BinaryOperator::Equality
-                            } else {
-                                BinaryOperator::Inequality
-                            },
-                            ctx.ast.move_expression(&mut bin_expr.right),
-                        ));
-                    }
                 }
             }
         }
@@ -650,7 +441,7 @@ impl<'a, 'b> PeepholeOptimizations {
         // `typeof a !== 'b'` -> `true``
         if let Expression::UnaryExpression(left) = &bin_expr.left {
             if left.operator.is_typeof() && bin_expr.operator.is_equality() {
-                let right_ty = ValueType::from(&bin_expr.right);
+                let right_ty = bin_expr.right.value_type(&ctx);
 
                 if !right_ty.is_undetermined() && right_ty != ValueType::String {
                     return Some(ctx.ast.expression_boolean_literal(
@@ -688,7 +479,7 @@ impl<'a, 'b> PeepholeOptimizations {
     fn fold_object_spread(
         &mut self,
         e: &mut ObjectExpression<'a>,
-        ctx: Ctx<'a, 'b>,
+        ctx: Ctx<'a, '_>,
     ) -> Option<Expression<'a>> {
         let len = e.properties.len();
         e.properties.retain(|p| {
@@ -877,8 +668,8 @@ mod test {
 
         fold("null == 0", "!1");
         fold("null == 1", "!1");
-        // test("null == 0n", "!1");
-        // test("null == 1n", "!1");
+        fold("null == 0n", "!1");
+        fold("null == 1n", "!1");
         fold("null == 'hi'", "!1");
         fold("null == true", "!1");
         fold("null == false", "!1");
@@ -897,8 +688,8 @@ mod test {
 
         fold("null != 0", "!0");
         fold("null != 1", "!0");
-        // test("null != 0n", "!0");
-        // test("null != 1n", "!0");
+        fold("null != 0n", "!0");
+        fold("null != 1n", "!0");
         fold("null != 'hi'", "!0");
         fold("null != true", "!0");
         fold("null != false", "!0");
@@ -918,16 +709,16 @@ mod test {
         fold("0 < null", "!1");
         fold("0 > null", "!1");
         fold("0 >= null", "!0");
-        // test("0n < null", "!1");
-        // test("0n > null", "!1");
-        // test("0n >= null", "!0");
+        fold("0n < null", "!1");
+        fold("0n > null", "!1");
+        fold("0n >= null", "!0");
         fold("true > null", "!0");
         fold("'hi' < null", "!1");
         fold("'hi' >= null", "!1");
         fold("null <= null", "!0");
 
         fold("null < 0", "!1");
-        // test("null < 0n", "!1");
+        fold("null < 0n", "!1");
         fold("null > true", "!1");
         fold("null < 'hi'", "!1");
         fold("null >= 'hi'", "!1");
@@ -1019,6 +810,19 @@ mod test {
     }
 
     #[test]
+    fn test_number_number_comparison() {
+        fold("1 > 1", "!1");
+        fold("2 == 3", "!1");
+        fold("3.6 === 3.6", "!0");
+        fold_same("+x > +y");
+        fold_same("+x == +y");
+        fold("+x === +y", "+x == +y");
+        fold_same("+x > +x"); // foldable to false
+        fold_same("+x == +x");
+        fold("+x === +x", "+x == +x");
+    }
+
+    #[test]
     fn test_string_string_comparison() {
         fold("'a' < 'b'", "!0");
         fold("'a' <= 'b'", "!0");
@@ -1086,10 +890,10 @@ mod test {
         fold("NaN <= 1", "!1");
         fold("NaN > 1", "!1");
         fold("NaN >= 1", "!1");
-        // test("NaN < 1n", "!1");
-        // test("NaN <= 1n", "!1");
-        // test("NaN > 1n", "!1");
-        // test("NaN >= 1n", "!1");
+        fold("NaN < 1n", "!1");
+        fold("NaN <= 1n", "!1");
+        fold("NaN > 1n", "!1");
+        fold("NaN >= 1n", "!1");
 
         fold("NaN < NaN", "!1");
         fold("NaN >= NaN", "!1");
@@ -1118,7 +922,24 @@ mod test {
     }
 
     #[test]
+    #[ignore]
+    fn test_object_comparison1() {
+        fold("!new Date()", "false");
+        fold("!!new Date()", "true");
+
+        fold("new Date() == null", "false");
+        fold("new Date() == undefined", "false");
+        fold("new Date() != null", "true");
+        fold("new Date() != undefined", "true");
+        fold("null == new Date()", "false");
+        fold("undefined == new Date()", "false");
+        fold("null != new Date()", "true");
+        fold("undefined != new Date()", "true");
+    }
+
+    #[test]
     fn js_typeof() {
+        fold("x = typeof 1n", "x = \"bigint\"");
         fold("x = typeof 1", "x = \"number\"");
         fold("x = typeof 'foo'", "x = \"string\"");
         fold("x = typeof true", "x = \"boolean\"");
@@ -1130,10 +951,16 @@ mod test {
         fold("x = typeof [1]", "x = \"object\"");
         fold("x = typeof [1,[]]", "x = \"object\"");
         fold("x = typeof {}", "x = \"object\"");
+        test("var a, b; NOOP(x = typeof (a === b))", "var a, b; NOOP(x = \"boolean\")");
+        test("var foo; NOOP(x = typeof { foo })", "var foo; NOOP(x = \"object\")");
         fold("x = typeof function() {}", "x = 'function'");
+        fold("x = typeof (() => {})", "x = 'function'");
+        fold("x = typeof class{}", "x = \"function\"");
+        fold_same("x = typeof foo"); // no sideeffect, but we don't know the result
 
         fold_same("x = typeof[1,[foo()]]");
         fold_same("x = typeof{bathwater:baby()}");
+        fold_same("x = typeof class { static { foo() } }");
     }
 
     #[test]
@@ -1162,7 +989,7 @@ mod test {
         fold("a=+false", "a=0");
         fold_same("a=+foo()");
         fold_same("a=+f");
-        // test("a=+(f?true:false)", "a=+(f?1:0)");
+        fold("a=+(f?true:false)", "a=+!!f");
         fold("a=+0", "a=0");
         fold("a=+Infinity", "a=Infinity");
         fold("a=+NaN", "a=NaN");
@@ -1175,7 +1002,17 @@ mod test {
         fold_same("a=~~foo()");
         fold("a=~0xffffffff", "a=0");
         fold("a=~~0xffffffff", "a=-1");
-        // test_same("a=~.5");
+        fold("a=~.5", "a=-1");
+
+        fold("a=+[]", "a=0");
+        fold_same("a=+[...foo]");
+        fold("a=+[,]", "a=0");
+        fold("a=+[0]", "a=0");
+        fold("a=+['0x10']", "a=16");
+        fold("a=+[[]]", "a=0");
+        fold("a=+[0, 1]", "a=NaN");
+        test_same("var foo; NOOP(a=+[0, ...foo])"); // can be either `a=0` or `a=NaN` (also `...foo` may have a side effect)
+        test("var foo; NOOP(a=+[0, ...[foo ? 'foo': ''], 1])", "var foo; NOOP(a=NaN)");
     }
 
     #[test]
@@ -1381,6 +1218,8 @@ mod test {
         // these cases look strange because bitwise OR converts unsigned numbers to be signed
         fold("x = 1 | 3000000001", "x = -1294967295");
         fold("x = 4294967295 | 0", "x = -1");
+
+        fold("x = -1 | 0", "x = -1");
     }
 
     #[test]
@@ -1482,6 +1321,12 @@ mod test {
         fold("8589934591 >>> 0", "4294967295");
         fold("8589934592 >>> 0", "0");
         fold("8589934593 >>> 0", "1");
+
+        fold("x = -1 << 1", "x = -2");
+        fold("x = -1 << 8", "x = -256");
+        fold("x = -1 >> 1", "x = -1");
+        fold("x = -2 >> 1", "x = -1");
+        fold("x = -1 >> 0", "x = -1");
     }
 
     #[test]
@@ -1489,8 +1334,8 @@ mod test {
         fold("x = 'a' + 'bc'", "x = 'abc'");
         fold("x = 'a' + 5", "x = 'a5'");
         fold("x = 5 + 'a'", "x = '5a'");
-        // test("x = 'a' + 5n", "x = 'a5n'");
-        // test("x = 5n + 'a'", "x = '5na'");
+        fold("x = 'a' + 5n", "x = 'a5'");
+        fold("x = 5n + 'a'", "x = '5a'");
         fold("x = 'a' + ''", "x = 'a'");
         fold("x = 'a' + foo()", "x = 'a'+foo()");
         fold("x = foo() + 'a' + 'b'", "x = foo()+'ab'");
@@ -1498,23 +1343,23 @@ mod test {
         fold("x = foo() + 'a' + 'b' + 'cd' + bar()", "x = foo()+'abcd'+bar()");
         fold("x = foo() + 2 + 'b'", "x = foo()+2+\"b\""); // don't fold!
 
-        // test("x = foo() + 'a' + 2", "x = foo()+\"a2\"");
+        fold("x = foo() + 'a' + 2", "x = foo()+\"a2\"");
         fold("x = '' + null", "x = 'null'");
         fold("x = true + '' + false", "x = 'truefalse'");
-        // test("x = '' + []", "x = ''");
-        // test("x = foo() + 'a' + 1 + 1", "x = foo() + 'a11'");
+        // fold("x = '' + []", "x = ''");
+        fold("x = foo() + 'a' + 1 + 1", "x = foo() + 'a11'");
         fold("x = 1 + 1 + 'a'", "x = '2a'");
         fold("x = 1 + 1 + 'a'", "x = '2a'");
         fold("x = 'a' + (1 + 1)", "x = 'a2'");
-        // test("x = '_' + p1 + '_' + ('' + p2)", "x = '_' + p1 + '_' + p2");
-        // test("x = 'a' + ('_' + 1 + 1)", "x = 'a_11'");
-        // test("x = 'a' + ('_' + 1) + 1", "x = 'a_11'");
-        // test("x = 1 + (p1 + '_') + ('' + p2)", "x = 1 + (p1 + '_') + p2");
-        // test("x = 1 + p1 + '_' + ('' + p2)", "x = 1 + p1 + '_' + p2");
-        // test("x = 1 + 'a' + p1", "x = '1a' + p1");
-        // test("x = (p1 + (p2 + 'a')) + 'b'", "x = (p1 + (p2 + 'ab'))");
-        // test("'a' + ('b' + p1) + 1", "'ab' + p1 + 1");
-        // test("x = 'a' + ('b' + p1 + 'c')", "x = 'ab' + (p1 + 'c')");
+        // fold("x = '_' + p1 + '_' + ('' + p2)", "x = '_' + p1 + '_' + p2");
+        fold("x = 'a' + ('_' + 1 + 1)", "x = 'a_11'");
+        fold("x = 'a' + ('_' + 1) + 1", "x = 'a_11'");
+        // fold("x = 1 + (p1 + '_') + ('' + p2)", "x = 1 + (p1 + '_') + p2");
+        // fold("x = 1 + p1 + '_' + ('' + p2)", "x = 1 + p1 + '_' + p2");
+        fold("x = 1 + 'a' + p1", "x = '1a' + p1");
+        // fold("x = (p1 + (p2 + 'a')) + 'b'", "x = (p1 + (p2 + 'ab'))");
+        // fold("'a' + ('b' + p1) + 1", "'ab' + p1 + 1");
+        // fold("x = 'a' + ('b' + p1 + 'c')", "x = 'ab' + (p1 + 'c')");
         fold("void 0 + ''", "'undefined'");
 
         fold_same("x = 'a' + (4 + p1 + 'a')");
@@ -1554,6 +1399,11 @@ mod test {
         fold_same("x = y + 10 + 20");
         fold("x = 1 + null", "x = 1");
         fold("x = null + 1", "x = 1");
+    }
+
+    #[test]
+    fn test_fold_sub() {
+        fold("x = 10 - 20", "x = -10");
     }
 
     #[test]
@@ -1619,8 +1469,8 @@ mod test {
 
     #[test]
     fn test_fold_left() {
-        fold_same("(+x - 1) + 2"); // not yet
-        fold("(+x & 1) & 2", "+x & 0");
+        fold("(+x - 1) + 2", "x - 1 + 2"); // not yet
+        fold("(+x & 1) & 2", "x & 0");
     }
 
     #[test]
@@ -1757,10 +1607,12 @@ mod test {
     }
 
     #[test]
-    fn test_fold_typeof_addition_string() {
+    fn test_fold_useless_string_addition() {
         fold_same("typeof foo");
         fold_same("typeof foo + '123'");
         fold("typeof foo + ''", "typeof foo");
+        fold("'' + typeof foo", "typeof foo");
+        fold("(foo ? 'a' : 'b') + ''", "foo ? 'a' : 'b'");
         fold_same("typeof foo - ''");
     }
 
@@ -1786,7 +1638,11 @@ mod test {
         fold("typeof foo === 'number'", "typeof foo == 'number'");
     }
 
-    // TODO: All big ints are rare and difficult to handle.
+    #[test]
+    fn test_issue_8782() {
+        fold("+(void unknown())", "+void unknown()");
+    }
+
     mod bigint {
         use super::{
             fold, fold_same, MAX_SAFE_FLOAT, MAX_SAFE_INT, NEG_MAX_SAFE_FLOAT, NEG_MAX_SAFE_INT,
@@ -1811,8 +1667,8 @@ mod test {
             fold("x = 3n ^ 1n", "x = 2n");
             fold("x = 3n ^ 3n", "x = 0n");
 
-            // test("x = -1n & 0n", "x = 0n");
-            // test("x = 0n & -1n", "x = 0n");
+            fold("x = -1n & 0n", "x = 0n");
+            fold("x = 0n & -1n", "x = 0n");
             fold("x = 1n & 4n", "x = 0n");
             fold("x = 2n & 3n", "x = 2n");
 
@@ -1851,7 +1707,6 @@ mod test {
         }
 
         #[test]
-        #[ignore]
         fn test_bigint_number_comparison() {
             fold("1n < 2", "!0");
             fold("1n > 2", "!1");
@@ -1892,7 +1747,6 @@ mod test {
         }
 
         #[test]
-        #[ignore]
         fn test_bigint_string_comparison() {
             fold("1n < '2'", "!0");
             fold("2n > '1'", "!0");
@@ -1905,7 +1759,6 @@ mod test {
         }
 
         #[test]
-        #[ignore]
         fn test_string_bigint_comparison() {
             fold("'1' < 2n", "!0");
             fold("'2' > 1n", "!0");

@@ -4,6 +4,26 @@ All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project does not adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) until v1.0.0.
 
+## [0.49.0] - 2025-02-10
+
+### Refactor
+
+- 85b8ea4 minifier: Extract `symbols().symbol_is_used(symbol_id)` (#8995) (sapphi-red)
+
+### Styling
+
+- a4a8e7d all: Replace `#[allow]` with `#[expect]` (#8930) (overlookmotel)
+
+## [0.48.2] - 2025-02-02
+
+### Features
+
+- 256ae78 semantic: Report error for empty JSX attribute expression (#8815) (Dunqing)
+
+### Refactor
+
+- 6aa2dde codegen: Accept SymbolTable instead of Mangler (#8829) (Daniel Bulant)
+
 ## [0.48.1] - 2025-01-26
 
 ### Features
@@ -124,7 +144,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - 98d7946 semantic: Import flags and ID types from `oxc_syntax` (#7887) (overlookmotel)
 - 1cf8f8f semantic: `SymbolTable::set_name` return old name (#7869) (overlookmotel)
 - 5d42df8 semantic: Use `Expression::is_super` (#7851) (overlookmotel)
-- 8cf9766 semantic, syntax, wasm: Remove `#![allow(non_snake_case)]` (#7863) (overlookmotel)
+- 8cf9766 semantic, syntax, wasm: Remove `#![expect(non_snake_case)]` (#7863) (overlookmotel)
 
 ### Styling
 
@@ -405,7 +425,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Refactor
 
-- 4bdc202 rust: Remove some #[allow(unused)] (#5716) (Boshen)
+- 4bdc202 rust: Remove some #[expect(unused)] (#5716) (Boshen)
 - a35fb14 semantic: `Stats::assert_accurate` take `self` (#5758) (overlookmotel)
 - 4b896f1 semantic: Make `Stats` `Copy` (#5756) (overlookmotel)
 - b4b460f semantic: `Stats` store counts as `u32` (#5754) (overlookmotel)

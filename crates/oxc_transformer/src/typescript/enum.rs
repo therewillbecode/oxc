@@ -409,7 +409,7 @@ impl<'a> TypeScriptEnum<'a> {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+    #[expect(clippy::cast_sign_loss)]
     fn eval_binary_expression(
         &self,
         expr: &BinaryExpression<'a>,
@@ -474,7 +474,6 @@ impl<'a> TypeScriptEnum<'a> {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     fn eval_unary_expression(
         &self,
         expr: &UnaryExpression<'a>,
@@ -574,9 +573,7 @@ impl IdentifierReferenceRename<'_, '_> {
         //   }
         // }
         // ```
-        //
-        // `NonEmptyStack` guarantees that the stack is not empty.
-        *self.scope_stack.first().unwrap() == symbol_scope_id
+        *self.scope_stack.first() == symbol_scope_id
             // The resolved symbol is declared outside the enum,
             // and we have checked that the name exists in previous_enum_members:
             //
@@ -586,7 +583,7 @@ impl IdentifierReferenceRename<'_, '_> {
             // enum Foo { B = A }
             //                ^ This should be renamed to Foo.A
             // ```
-        || !self.scope_stack.contains(&symbol_scope_id)
+            || !self.scope_stack.contains(&symbol_scope_id)
     }
 }
 
@@ -602,7 +599,7 @@ impl<'a> VisitMut<'a> for IdentifierReferenceRename<'a, '_> {
     fn visit_expression(&mut self, expr: &mut Expression<'a>) {
         match expr {
             Expression::Identifier(ident) if self.should_reference_enum_member(ident) => {
-                let object = self.ctx.ast.expression_identifier_reference(SPAN, self.enum_name);
+                let object = self.ctx.ast.expression_identifier(SPAN, self.enum_name);
                 let property = self.ctx.ast.identifier_name(SPAN, ident.name);
                 *expr = self.ctx.ast.member_expression_static(SPAN, object, property, false).into();
             }

@@ -9,7 +9,9 @@ use oxc_ast::{
     VisitMut,
 };
 use oxc_parser::Parser;
-use oxc_prettier::{ArrowParens, EndOfLine, PrettierOptions, QuoteProps, TrailingComma};
+use oxc_prettier::{
+    ArrowParens, EndOfLine, ObjectWrap, PrettierOptions, QuoteProps, TrailingComma,
+};
 use oxc_span::{GetSpan, SourceType};
 
 /// Vec<(key, value)>
@@ -52,7 +54,7 @@ impl VisitMut<'_> for SpecParser {
     // runFormatTest(import.meta, parser, { semi: false });
     // ````
     fn visit_variable_declarator(&mut self, decl: &mut VariableDeclarator<'_>) {
-        let Some(name) = decl.id.get_identifier() else { return };
+        let Some(name) = decl.id.get_identifier_name() else { return };
         if !matches!(name.as_str(), "parser" | "parsers") {
             return;
         }
@@ -138,6 +140,10 @@ impl VisitMut<'_> for SpecParser {
                                 "quoteProps" => {
                                     options.quote_props =
                                         QuoteProps::from_str(literal.value.as_str()).unwrap();
+                                }
+                                "objectWrap" => {
+                                    options.object_wrap =
+                                        ObjectWrap::from_str(literal.value.as_str()).unwrap();
                                 }
                                 "arrowParens" => {
                                     options.arrow_parens =

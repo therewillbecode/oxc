@@ -1,4 +1,4 @@
-#![allow(unused, clippy::unused_self)]
+#![expect(unused, clippy::unused_self)]
 //! Prettier
 //!
 //! A port of <https://github.com/prettier/prettier>
@@ -18,7 +18,9 @@ use oxc_ast::{ast::Program, AstKind};
 use oxc_span::Span;
 use oxc_syntax::identifier::is_line_terminator;
 
-pub use crate::options::{ArrowParens, EndOfLine, PrettierOptions, QuoteProps, TrailingComma};
+pub use crate::options::{
+    ArrowParens, EndOfLine, ObjectWrap, PrettierOptions, QuoteProps, TrailingComma,
+};
 use crate::{format::Format, ir::Doc, printer::Printer};
 
 type GroupId = u32;
@@ -56,7 +58,6 @@ pub struct Prettier<'a> {
 }
 
 impl<'a> Prettier<'a> {
-    #[allow(clippy::needless_pass_by_value)]
     pub fn new(allocator: &'a Allocator, options: PrettierOptions) -> Self {
         Self {
             allocator,
@@ -75,6 +76,7 @@ impl<'a> Prettier<'a> {
     }
 
     pub fn doc(mut self, program: &Program<'a>) -> Doc<'a> {
+        self.source_text = program.source_text;
         program.format(&mut self)
     }
 
@@ -99,14 +101,18 @@ impl<'a> Prettier<'a> {
         (len >= 3).then(|| self.stack[len - 3])
     }
 
-    #[allow(unused)]
-    fn nth_parent_kind(&self, n: usize) -> Option<AstKind<'a>> {
+    fn parent_parent_parent_kind(&self) -> Option<AstKind<'a>> {
         let len = self.stack.len();
-        (len > n).then(|| self.stack[len - n - 1])
+        (len >= 4).then(|| self.stack[len - 4])
+    }
+
+    fn find_ancestor(&self, predicate: impl Fn(AstKind<'a>) -> bool) -> Option<AstKind<'a>> {
+        // Skip the current node
+        self.stack.iter().rev().skip(1).find(|&&kind| predicate(kind)).copied()
     }
 
     /// A hack for erasing the lifetime requirement.
-    #[allow(clippy::unused_self)]
+    #[expect(clippy::unused_self)]
     fn alloc<T>(&self, t: &T) -> &'a T {
         // SAFETY:
         // This should be safe as long as `src` is an reference from the allocator.
@@ -164,7 +170,7 @@ impl<'a> Prettier<'a> {
         self.skip_everything_but_new_line(Some(start_index), /* backwards */ false)
     }
 
-    #[allow(clippy::unused_self)]
+    #[expect(clippy::unused_self)]
     fn skip_inline_comment(&self, start_index: Option<u32>) -> Option<u32> {
         let start_index = start_index?;
         Some(start_index)
@@ -210,7 +216,7 @@ impl<'a> Prettier<'a> {
         None
     }
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation)]
     fn skip_newline(&self, start_index: Option<u32>, backwards: bool) -> Option<u32> {
         let start_index = start_index?;
         let c = if backwards {

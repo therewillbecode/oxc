@@ -60,7 +60,7 @@ fn dce_if_statement() {
     );
     test(
         "if (xxx) { foo } else if (false) { var a; var b; } else if (false) { var c; var d; }",
-        "if (xxx) foo; else if (false) var a, b; else if (false) var c, d;",
+        "if (xxx) foo; else if (0) var a, b; else if (0) var c, d;",
     );
 
     test("if (!false) { foo }", "foo");
@@ -80,7 +80,8 @@ fn dce_if_statement() {
 
     // Shadowed `undefined` as a variable should not be erased.
     // This is a rollup test.
-    test_same("function foo(undefined) { if (!undefined) foo }");
+    // <https://github.com/rollup/rollup/blob/master/test/function/samples/allow-undefined-as-parameter/main.js>
+    test_same("function foo(undefined) { if (!undefined) throw Error('') }");
 
     test("function foo() { if (undefined) { bar } }", "function foo() { }");
     test("function foo() { { bar } }", "function foo() { bar }");

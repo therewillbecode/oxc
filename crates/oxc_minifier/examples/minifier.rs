@@ -1,4 +1,4 @@
-#![allow(clippy::print_stdout)]
+#![expect(clippy::print_stdout)]
 use std::path::Path;
 
 use oxc_allocator::Allocator;
@@ -55,7 +55,7 @@ fn minify(
     let ret = Minifier::new(options).build(allocator, &mut program);
     CodeGenerator::new()
         .with_options(CodegenOptions { minify: nospace, ..CodegenOptions::default() })
-        .with_mangler(ret.mangler)
+        .with_symbol_table(ret.symbol_table)
         .build(&program)
         .code
 }

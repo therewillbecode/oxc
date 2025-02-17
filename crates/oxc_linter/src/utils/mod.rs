@@ -7,13 +7,14 @@ mod promise;
 mod react;
 mod react_perf;
 mod unicorn;
+mod url;
 mod vitest;
 
 use std::{io, path::Path};
 
 pub use self::{
     config::*, express::*, jest::*, jsdoc::*, nextjs::*, promise::*, react::*, react_perf::*,
-    unicorn::*, vitest::*,
+    unicorn::*, url::*, vitest::*,
 };
 
 /// List of Jest rules that have Vitest equivalents.
@@ -34,6 +35,7 @@ const VITEST_COMPATIBLE_JEST_RULES: phf::Set<&'static str> = phf::phf_set! {
     "no-interpolation-in-snapshots",
     "no-restricted-jest-methods",
     "no-restricted-matchers",
+    "no-standalone-expect",
     "no-test-prefixes",
     "no-test-return-statement",
     "prefer-comparison-matcher",

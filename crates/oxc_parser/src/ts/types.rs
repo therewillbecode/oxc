@@ -260,7 +260,7 @@ impl<'a> ParserImpl<'a> {
         {
             self.error(diagnostics::readonly_in_array_or_tuple_type(operator_span));
         }
-        Ok(self.ast.ts_type_type_operator(self.end_span(span), operator, ty))
+        Ok(self.ast.ts_type_type_operator_type(self.end_span(span), operator, ty))
     }
 
     fn parse_infer_type(&mut self) -> Result<TSType<'a>> {
@@ -338,7 +338,9 @@ impl<'a> ParserImpl<'a> {
             | Kind::Boolean
             | Kind::Undefined
             | Kind::Never
-            | Kind::Object => {
+            | Kind::Object
+            // Parse `null` as `TSNullKeyword` instead of null literal to align with typescript eslint.
+            | Kind::Null => {
                 if let Some(ty) = self.try_parse(Self::parse_keyword_and_no_dot) {
                     Ok(ty)
                 } else {
@@ -361,7 +363,7 @@ impl<'a> ParserImpl<'a> {
             // return parseJSDocFunctionType();
             Kind::Question => self.parse_js_doc_unknown_or_nullable_type(),
             Kind::Bang => self.parse_js_doc_non_nullable_type(),
-            Kind::NoSubstitutionTemplate | Kind::Str | Kind::True | Kind::False | Kind::Null => {
+            Kind::NoSubstitutionTemplate | Kind::Str | Kind::True | Kind::False => {
                 self.parse_literal_type_node(/* negative */ false)
             }
             kind if kind.is_number() => {
@@ -437,10 +439,6 @@ impl<'a> ParserImpl<'a> {
                 self.bump_any();
                 self.ast.ts_type_never_keyword(self.end_span(span))
             }
-            Kind::Null => {
-                self.bump_any();
-                self.ast.ts_type_null_keyword(self.end_span(span))
-            }
             Kind::Number => {
                 self.bump_any();
                 self.ast.ts_type_number_keyword(self.end_span(span))
@@ -465,9 +463,9 @@ impl<'a> ParserImpl<'a> {
                 self.bump_any();
                 self.ast.ts_type_unknown_keyword(self.end_span(span))
             }
-            Kind::Void => {
+            Kind::Null => {
                 self.bump_any();
-                self.ast.ts_type_void_keyword(self.end_span(span))
+                self.ast.ts_type_null_keyword(self.end_span(span))
             }
             _ => return Err(self.unexpected()),
         };
@@ -963,10 +961,8 @@ impl<'a> ParserImpl<'a> {
         } else {
             match expression {
                 Expression::BooleanLiteral(literal) => TSLiteral::BooleanLiteral(literal),
-                Expression::NullLiteral(literal) => TSLiteral::NullLiteral(literal),
                 Expression::NumericLiteral(literal) => TSLiteral::NumericLiteral(literal),
                 Expression::BigIntLiteral(literal) => TSLiteral::BigIntLiteral(literal),
-                Expression::RegExpLiteral(literal) => TSLiteral::RegExpLiteral(literal),
                 Expression::StringLiteral(literal) => TSLiteral::StringLiteral(literal),
                 Expression::TemplateLiteral(literal) => TSLiteral::TemplateLiteral(literal),
                 _ => return Err(self.unexpected()),
@@ -1327,7 +1323,6 @@ impl<'a> ParserImpl<'a> {
                 break;
             }
 
-            #[allow(clippy::unnecessary_fallible_conversions)]
             if let Ok(kind) = ModifierKind::try_from(self.cur_kind()) {
                 let modifier = Modifier { kind, span: self.cur_token().span() };
                 flags.set(kind.into(), true);

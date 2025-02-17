@@ -88,7 +88,7 @@ jobs:
       - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
 
       - name: Install cross
-        uses: taiki-e/install-action@1936c8cfe365805f86ceb097d570620cc3a19932 # v2.47.25
+        uses: taiki-e/install-action@ad0904967b4c8e3005f6ed2efa1fa74dd9a05f32 # v2.48.13
         with:
           tool: cross
 
@@ -137,7 +137,7 @@ jobs:
           tar czf $OXLS_BIN_NAME.tar.gz $OXLS_BIN_NAME
 
       - name: Upload Binary
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
         with:
           if-no-files-found: error
           name: binaries-${{ matrix.code-target }}
@@ -153,7 +153,7 @@ jobs:
       contents: write # for softprops/action-gh-release@v1.3.1
       id-token: write # for `pnpm publish --provenance`
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0 # for changelog
           persist-credentials: false
@@ -174,7 +174,7 @@ jobs:
             echo EOF
           } >> $GITHUB_OUTPUT
 
-      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           merge-multiple: true
 
@@ -193,6 +193,9 @@ jobs:
           node npm/oxlint/scripts/generate-packages.mjs
           cat npm/oxlint/package.json
           for package in npm/oxlint*; do cat $package/package.json ; echo ; done
+
+      - name: wait 3 minutes for packages to sync on npm
+        run: sleep 180s
 
       - name: Publish npm packages as latest
         env:
