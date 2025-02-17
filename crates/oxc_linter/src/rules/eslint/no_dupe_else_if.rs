@@ -33,7 +33,6 @@ declare_oxc_lint!(
     /// ### Examples
     ///
     /// Examples of **incorrect** code for this rule:
-    ///
     /// ```javascript
     /// if (a) {
     ///     foo();
@@ -67,7 +66,6 @@ declare_oxc_lint!(
     /// ```
     ///
     /// Examples of **correct** code for this rule:
-    ///
     /// ```javascript
     /// if (a) {
     ///     foo();
