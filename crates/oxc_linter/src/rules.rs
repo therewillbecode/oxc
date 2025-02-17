@@ -42,6 +42,7 @@ mod eslint {
     pub mod func_style;
     pub mod getter_return;
     pub mod guard_for_in;
+    pub mod id_denylist;
     pub mod init_declarations;
     pub mod max_classes_per_file;
     pub mod max_lines;
@@ -548,6 +549,7 @@ oxc_macros::declare_all_lint_rules! {
     eslint::func_names,
     eslint::getter_return,
     eslint::guard_for_in,
+    eslint::id_denylist,
     eslint::init_declarations,
     eslint::max_classes_per_file,
     eslint::max_lines,
