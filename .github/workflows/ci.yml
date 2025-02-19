@@ -280,7 +280,7 @@ jobs:
 
       - name: Restore dprint plugin cache
         id: cache-restore
-        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache/restore@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
         with:
           key: dprint-autofix-ci-${{ runner.os }}-${{ hashFiles('dprint.json') }}
           path: ~/.cache/dprint
@@ -295,7 +295,7 @@ jobs:
       - name: Save dprint plugin cache
         if: ${{ github.ref_name == 'main' }}
         id: cache-save
-        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache/save@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
         with:
           key: ${{ steps.cache-restore.outputs.cache-primary-key }}
           path: ~/.cache/dprint
@@ -314,12 +314,14 @@ jobs:
       - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
         if: steps.filter.outputs.src == 'true'
         with:
-          cache-key: warm
+          cache-key: napi
       - uses: ./.github/actions/pnpm
         if: steps.filter.outputs.src == 'true'
       - if: steps.filter.outputs.src == 'true'
         run: |
           pnpm run build-dev
+          # Reset the broken `.d.ts` files
+          git add . && git reset --hard
           pnpm run test
           pnpm --filter e2e run test
           git diff --exit-code # Must commit everything

@@ -9,6 +9,7 @@ use oxc_ast_macros::ast;
 
 #[ast]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[builder(default)]
 #[clone_in(default)]
 #[content_eq(skip)]
 #[estree(skip)]
@@ -79,6 +80,7 @@ bitflags! {
         const GetAccessor      = 1 << 7;
         const SetAccessor      = 1 << 8;
         const CatchClause      = 1 << 9;
+        const DirectEval       = 1 << 10; // <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#direct_and_indirect_eval>
         const Var = Self::Top.bits() | Self::Function.bits() | Self::ClassStaticBlock.bits() | Self::TsModuleBlock.bits();
     }
 }
@@ -152,5 +154,10 @@ impl ScopeFlags {
     #[inline]
     pub fn is_catch_clause(&self) -> bool {
         self.contains(Self::CatchClause)
+    }
+
+    #[inline]
+    pub fn contains_direct_eval(&self) -> bool {
+        self.contains(Self::DirectEval)
     }
 }
