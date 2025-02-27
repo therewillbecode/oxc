@@ -3,6 +3,7 @@ use oxc_macros::declare_oxc_lint;
 use oxc_span::Span;
 use serde_json::Value;
 use  oxc_ast::AstKind;
+use oxc_semantic::ScopeId;
 
 use crate::{
     AstNode,
@@ -88,31 +89,52 @@ impl Rule for MaxStatements {
             AstKind::FunctionBody(b) => {
                 let config: &MaxStatementsConfig = &self.0;
 
-                let Some(f) : Option< &AstNode<'a>> = ctx.nodes().parent_node(node.node_id) else {
+                let Some(f) : Option< &AstNode<'a>> = ctx.nodes().parent_node(node.id()) else {
                     return;
                 };
 
-                match f {
+                match f.kind() {
 
 AstKind::Function(func) => {
 
+    // could be faster when func.is_declaration() == true to just use func.scope_id and not get the declaration
+
+    let mut func_scope_id : Option<ScopeId> = None;
+    if let Some(ident) = &func.id {
+        // function with an identifier so go to declaration
+        let symbol_table = ctx.semantic().symbols();
+
+    let func_decl_symbol_id = symbol_table.get_declaration(ident.symbol_id());
+    let func_decl_node = ctx.nodes().get_node(func_decl_symbol_id);
+
+   func_scope_id = Some(func_decl_node.scope_id());
+    } else {
+        //anonymous function just use the scope id of this node which declares the function binding
+
+       func_scope_id = Some(func.scope_id());
+    }
+
+    let top_level_func_decl: bool = .is_top()
+   // let func_decl = ctx.symbols().get_declaration(func.id.symbol_id);
+
+    println!("func decl {0:?}", func_scope_id);
+
+    /*
+     let is_top_level: bool = ctx.scopes().get_flags(func_decl.scope_id()).is_top();
+
+                     println!("is top level {is_top_level:?}, scope id {0:?}", node);
+                    if config.ignore_top_level_functions && is_top_level {
+                        return;
+                    }
+*/
+                    println!("statements {0:?}, but max is {1:?}", b.statements.len(), self.0.max);
+
+                    if b.statements.len() > self.0.max {
+                        println!("awoooooo");
+                        ctx.diagnostic(max_statements_diagnostic(b.span))
+                    }
 }
-                }
-
-
-//let func_decl = ctx.symbols().get_declaration(func_ident);
-// let is_top_level: bool = ctx.scopes().get_flags(func_decl.scope_id()).is_top();
-
-                 println!("is top level {is_top_level:?}, scope id {0:?}", node);
-                if config.ignore_top_level_functions && is_top_level {
-                    return;
-                }
-
-                println!("statements {0:?}, but max is {1:?}", b.statements.len(), self.0.max);
-
-                if b.statements.len() > self.0.max {
-                    println!("awoooooo");
-                    ctx.diagnostic(max_statements_diagnostic(b.span))
+_ => {}
                 }
             }
             _ => {}
