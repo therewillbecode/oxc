@@ -53,7 +53,8 @@ impl Default for MaxStatementsConfig {
     }
 }
 
-/// Returns true if the function has a scope_id of 0 which is the top level scope.
+/// Returns true if the closed enclosing function body for this function is declared at the top level scope.
+/// We call this recurively until there is no more enclosing parent function.
 fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
     // could be faster when func.is_declaration() == true to just use func.scope_id and not get the declaration
 
@@ -69,6 +70,8 @@ fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
     };
 
     ctx.scopes().get_flags(decl_scope_id).is_top()
+
+    todo NEED TO CALL THIS RECURSEIVELY ON EACH FUNCTION BODY CONTAINING THIS ONE
 }
 
 impl Rule for MaxStatements {
@@ -77,7 +80,7 @@ impl Rule for MaxStatements {
 
         println!("config {value:?}");
 
-        let max_statements = 
+        let max_statements =
         // option is just a usize like 8.
    value
             .get(0)
