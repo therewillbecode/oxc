@@ -2,8 +2,9 @@ use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
 use oxc_span::Span;
 use serde_json::Value;
-use  oxc_ast::AstKind;
+use oxc_ast::AstKind;
 use oxc_semantic::ScopeId;
+use oxc_ast::ast::Function;
 
 use crate::{
     AstNode,
@@ -56,6 +57,25 @@ impl Default for MaxStatementsConfig {
     }
 }
 
+
+/// Returns true if the function has a scope_id of 0 which is the top level scope.
+fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
+    // could be faster when func.is_declaration() == true to just use func.scope_id and not get the declaration
+
+  let decl_scope_id = if let Some(ident) = &func.id {
+        // function with an identifier so go to declaration
+        let symbol_table = ctx.semantic().symbols();
+
+    let func_decl_symbol_id = symbol_table.get_declaration(ident.symbol_id());
+       ctx.nodes().get_node(func_decl_symbol_id).scope_id()
+    } else {
+        // Anonymous function so just use the scope id of this node which declares the function binding
+       func.scope_id()
+    };
+
+  ctx.scopes().get_flags(decl_scope_id).is_top()
+}
+
 impl Rule for MaxStatements {
     fn from_configuration(value: serde_json::Value) -> Self {
         let config = value.get(0);
@@ -97,27 +117,12 @@ impl Rule for MaxStatements {
 
 AstKind::Function(func) => {
 
-    // could be faster when func.is_declaration() == true to just use func.scope_id and not get the declaration
-
-    let mut func_scope_id : Option<ScopeId> = None;
-    if let Some(ident) = &func.id {
-        // function with an identifier so go to declaration
-        let symbol_table = ctx.semantic().symbols();
-
-    let func_decl_symbol_id = symbol_table.get_declaration(ident.symbol_id());
-    let func_decl_node = ctx.nodes().get_node(func_decl_symbol_id);
-
-   func_scope_id = Some(func_decl_node.scope_id());
-    } else {
-        //anonymous function just use the scope id of this node which declares the function binding
-
-       func_scope_id = Some(func.scope_id());
+    if config.ignore_top_level_functions && func_declared_top_level(ctx, func) {
+        return;
     }
+let top_level : bool = func_declared_top_level(ctx, func);
+  println!("is top {0:?}", top_level);
 
-    let top_level_func_decl: bool = .is_top()
-   // let func_decl = ctx.symbols().get_declaration(func.id.symbol_id);
-
-    println!("func decl {0:?}", func_scope_id);
 
     /*
      let is_top_level: bool = ctx.scopes().get_flags(func_decl.scope_id()).is_top();
