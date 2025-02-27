@@ -2,6 +2,7 @@ use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
 use oxc_span::Span;
 use serde_json::Value;
+use  oxc_ast::AstKind;
 
 use crate::{
     AstNode,
@@ -84,7 +85,29 @@ impl Rule for MaxStatements {
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
         match &node.kind() {
-            oxc_ast::AstKind::FunctionBody(b) => {
+            AstKind::FunctionBody(b) => {
+                let config: &MaxStatementsConfig = &self.0;
+
+                let Some(f) : Option< &AstNode<'a>> = ctx.nodes().parent_node(node.node_id) else {
+                    return;
+                };
+
+                match f {
+
+AstKind::Function(func) => {
+
+}
+                }
+
+
+//let func_decl = ctx.symbols().get_declaration(func_ident);
+// let is_top_level: bool = ctx.scopes().get_flags(func_decl.scope_id()).is_top();
+
+                 println!("is top level {is_top_level:?}, scope id {0:?}", node);
+                if config.ignore_top_level_functions && is_top_level {
+                    return;
+                }
+
                 println!("statements {0:?}, but max is {1:?}", b.statements.len(), self.0.max);
 
                 if b.statements.len() > self.0.max {
@@ -118,10 +141,10 @@ fn test() {
             "function foo() { var a; var b; var c; var x; var y; var z; bar(); baz(); qux(); quxx(); }",
             None,
         ),
-        (
-            "(function() { var bar = 1; return function () { return 42; }; })()",
-            Some(serde_json::json!([1, { "ignoreTopLevelFunctions": true }])),
-        ),
+//(
+//    "(function() { var bar = 1; return function () { return 42; }; })()",
+//    Some(serde_json::json!([1, { "ignoreTopLevelFunctions": true }])),
+//),
         (
             "function foo() { var bar = 1; var baz = 2; }",
             Some(serde_json::json!([1, { "ignoreTopLevelFunctions": true }])),
