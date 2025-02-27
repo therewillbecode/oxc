@@ -6,7 +6,6 @@ use serde_json::Value;
 use crate::{
     AstNode,
     context::LintContext,
-    fixer::{RuleFix, RuleFixer},
     rule::Rule,
 };
 
@@ -15,11 +14,6 @@ fn max_statements_diagnostic(span: Span) -> OxcDiagnostic {
     OxcDiagnostic::warn("Should be an imperative statement about what is wrong")
         .with_help("Should be a command-like statement that tells the user how to fix the issue")
         .with_label(span)
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct MaxStatements {
-    max: usize,
 }
 
 declare_oxc_lint!(
@@ -51,12 +45,12 @@ pub struct MaxStatements(Box<MaxStatementsConfig>);
 #[derive(Debug, Clone)]
 pub struct MaxStatementsConfig {
     pub max: usize,
-    pub ignoreTopLevelFunctions: bool,
+    pub ignore_top_level_functions: bool,
 }
 
 impl Default for MaxStatementsConfig {
     fn default() -> Self {
-        Self { max: 1, ignoreTopLevelFunctions: false }
+        Self { max: 10, ignore_top_level_functions: false }
     }
 }
 
@@ -68,7 +62,7 @@ impl Rule for MaxStatements {
             .and_then(serde_json::Number::as_u64)
             .and_then(|v| usize::try_from(v).ok())
         {
-            Self(Box::new(MaxStatementsConfig { max, ignoreTopLevelFunctions: false }))
+            Self(Box::new(MaxStatementsConfig { max, ignore_top_level_functions: false }))
         } else {
             let default_max = 10;
             let max = value
@@ -84,16 +78,16 @@ impl Rule for MaxStatements {
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
-            Self(Box::new(MaxStatementsConfig { max, ignoreTopLevelFunctions }))
+            Self(Box::new(MaxStatementsConfig { max, ignore_top_level_functions }))
         }
     }
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
         match &node.kind() {
             oxc_ast::AstKind::FunctionBody(b) => {
-                println!("statements {0:?}, but max is {1:?}", b.statements.len(), self.max);
+                println!("statements {0:?}, but max is {1:?}", b.statements.len(), self.0.max);
 
-                if b.statements.len() > self.max {
+                if b.statements.len() > self.0.max {
                     println!("awoooooo");
                     ctx.diagnostic(max_statements_diagnostic(b.span))
                 }
