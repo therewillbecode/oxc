@@ -1,16 +1,12 @@
+use oxc_ast::AstKind;
+use oxc_ast::ast::Function;
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
+use oxc_semantic::ScopeId;
 use oxc_span::Span;
 use serde_json::Value;
-use oxc_ast::AstKind;
-use oxc_semantic::ScopeId;
-use oxc_ast::ast::Function;
 
-use crate::{
-    AstNode,
-    context::LintContext,
-    rule::Rule,
-};
+use crate::{AstNode, context::LintContext, rule::Rule};
 
 fn max_statements_diagnostic(span: Span) -> OxcDiagnostic {
     // See <https://oxc.rs/docs/contribute/linter/adding-rules.html#diagnostics> for details
@@ -57,51 +53,52 @@ impl Default for MaxStatementsConfig {
     }
 }
 
-
 /// Returns true if the function has a scope_id of 0 which is the top level scope.
 fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
     // could be faster when func.is_declaration() == true to just use func.scope_id and not get the declaration
 
-  let decl_scope_id = if let Some(ident) = &func.id {
+    let decl_scope_id = if let Some(ident) = &func.id {
         // function with an identifier so go to declaration
         let symbol_table = ctx.semantic().symbols();
 
-    let func_decl_symbol_id = symbol_table.get_declaration(ident.symbol_id());
-       ctx.nodes().get_node(func_decl_symbol_id).scope_id()
+        let func_decl_symbol_id = symbol_table.get_declaration(ident.symbol_id());
+        ctx.nodes().get_node(func_decl_symbol_id).scope_id()
     } else {
         // Anonymous function so just use the scope id of this node which declares the function binding
-       func.scope_id()
+        func.scope_id()
     };
 
-  ctx.scopes().get_flags(decl_scope_id).is_top()
+    ctx.scopes().get_flags(decl_scope_id).is_top()
 }
 
 impl Rule for MaxStatements {
     fn from_configuration(value: serde_json::Value) -> Self {
-        let config = value.get(0);
-        if let Some(max) = config
+        let default_max = 10;
+
+        println!("config {value:?}");
+
+        let max_statements = 
+        // option is just a usize like 8.
+   value
+            .get(0)
             .and_then(Value::as_number)
             .and_then(serde_json::Number::as_u64)
             .and_then(|v| usize::try_from(v).ok())
-        {
-            Self(Box::new(MaxStatementsConfig { max, ignore_top_level_functions: false }))
-        } else {
-            let default_max = 10;
-            let max = value
-                .get(0)
-                .and_then(|config| config.get("max"))
-                .and_then(serde_json::Value::as_number)
-                .and_then(serde_json::Number::as_u64)
-                .map_or(default_max, |v| usize::try_from(v).unwrap_or(default_max));
+            .unwrap_or(default_max);
 
-            let ignore_top_level_functions = value
-                .get(0)
-                .and_then(|config| config.get("ignoreTopLevelFunctions"))
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
 
-            Self(Box::new(MaxStatementsConfig { max, ignore_top_level_functions }))
-        }
+        let Some(vec_config) = value.as_array() else {
+            return Self(Box::new(MaxStatementsConfig{ max: max_statements , ignore_top_level_functions: false}));
+        };
+
+        let ignore_top_level_functions = vec_config
+            .get(1)
+            .and_then(|config| config.get("ignoreTopLevelFunctions"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+
+        println!("ignore con {ignore_top_level_functions:?}");
+        Self(Box::new(MaxStatementsConfig { max: max_statements, ignore_top_level_functions }))
     }
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
@@ -109,37 +106,33 @@ impl Rule for MaxStatements {
             AstKind::FunctionBody(b) => {
                 let config: &MaxStatementsConfig = &self.0;
 
-                let Some(f) : Option< &AstNode<'a>> = ctx.nodes().parent_node(node.id()) else {
+                let Some(f): Option<&AstNode<'a>> = ctx.nodes().parent_node(node.id()) else {
                     return;
                 };
 
                 match f.kind() {
+                    AstKind::Function(func) => {
+                        if config.ignore_top_level_functions && func_declared_top_level(ctx, func) {
+                            return;
+                        }
+                        let top_level: bool = func_declared_top_level(ctx, func);
+                        println!(
+                            "is top {0:?}, config ignore top level: {1:?}",
+                            top_level, config.ignore_top_level_functions
+                        );
 
-AstKind::Function(func) => {
+                        println!(
+                            "statements {0:?}, but max is {1:?}",
+                            b.statements.len(),
+                            self.0.max
+                        );
 
-    if config.ignore_top_level_functions && func_declared_top_level(ctx, func) {
-        return;
-    }
-let top_level : bool = func_declared_top_level(ctx, func);
-  println!("is top {0:?}", top_level);
-
-
-    /*
-     let is_top_level: bool = ctx.scopes().get_flags(func_decl.scope_id()).is_top();
-
-                     println!("is top level {is_top_level:?}, scope id {0:?}", node);
-                    if config.ignore_top_level_functions && is_top_level {
-                        return;
+                        if b.statements.len() > self.0.max {
+                            println!("awoooooo");
+                            ctx.diagnostic(max_statements_diagnostic(b.span))
+                        }
                     }
-*/
-                    println!("statements {0:?}, but max is {1:?}", b.statements.len(), self.0.max);
-
-                    if b.statements.len() > self.0.max {
-                        println!("awoooooo");
-                        ctx.diagnostic(max_statements_diagnostic(b.span))
-                    }
-}
-_ => {}
+                    _ => {}
                 }
             }
             _ => {}
@@ -168,10 +161,10 @@ fn test() {
             "function foo() { var a; var b; var c; var x; var y; var z; bar(); baz(); qux(); quxx(); }",
             None,
         ),
-//(
-//    "(function() { var bar = 1; return function () { return 42; }; })()",
-//    Some(serde_json::json!([1, { "ignoreTopLevelFunctions": true }])),
-//),
+        (
+            "(function() { var bar = 1; return function () { return 42; }; })()",
+            Some(serde_json::json!([1, { "ignoreTopLevelFunctions": true }])),
+        ),
         (
             "function foo() { var bar = 1; var baz = 2; }",
             Some(serde_json::json!([1, { "ignoreTopLevelFunctions": true }])),
