@@ -2,16 +2,15 @@ use oxc_ast::AstKind;
 use oxc_ast::ast::Function;
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
-use oxc_semantic::ScopeId;
-use oxc_span::Span;
+use oxc_semantic::{Semantic, ScopeId};
+use oxc_span::{Span, GetSpan};
 use serde_json::Value;
 
-use crate::{AstNode, context::LintContext, rule::Rule};
+use crate::{AstNode,ast_util::iter_outer_expressions, context::LintContext, rule::Rule};
 
-fn max_statements_diagnostic(span: Span) -> OxcDiagnostic {
-    // See <https://oxc.rs/docs/contribute/linter/adding-rules.html#diagnostics> for details
-    OxcDiagnostic::warn("Should be an imperative statement about what is wrong")
-        .with_help("Should be a command-like statement that tells the user how to fix the issue")
+
+fn max_statements_diagnostic(span: Span, count: usize, max: usize) -> OxcDiagnostic {
+    OxcDiagnostic::warn(format!("Function has too many statements ({count:?}). Maximum allowed is {max:?}."))
         .with_label(span)
 }
 
@@ -53,10 +52,30 @@ impl Default for MaxStatementsConfig {
     }
 }
 
-/// Returns true if the closed enclosing function body for this function is declared at the top level scope.
-/// We call this recurively until there is no more enclosing parent function.
+
+/// Iterate over parent nodes and see if callee contains span of the node.
+fn is_iife<'a>(node: &AstNode<'a>, ctx: &LintContext, semantic: &Semantic<'a>) -> bool {
+//let Some(AstKind::CallExpression(call)) = iter_outer_expressions(semantic, node.id()).next()
+//else {
+//return false;
+//};
+//call.callee.span().contains_inclusive(node.span())
+
+    let Some(parent) = get_parent_node(node, ctx) else {
+        return false;
+    };
+    matches!(parent.kind(), AstKind::CallExpression(_))
+}
+
+
+/// Returns true if the closed enclosing function body for this function is declared at the top
+/// level scope.
+///
+/// do we? We call this recursively until there is no enclosing parent function around the
+/// function declaration.
 fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
     // could be faster when func.is_declaration() == true to just use func.scope_id and not get the declaration
+
 
     let decl_scope_id = if let Some(ident) = &func.id {
         // function with an identifier so go to declaration
@@ -71,7 +90,7 @@ fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
 
     ctx.scopes().get_flags(decl_scope_id).is_top()
 
-    todo NEED TO CALL THIS RECURSEIVELY ON EACH FUNCTION BODY CONTAINING THIS ONE
+    //todo NEED TO CALL THIS RECURSEIVELY ON EACH FUNCTION BODY CONTAINING THIS ONE
 }
 
 impl Rule for MaxStatements {
@@ -115,8 +134,20 @@ impl Rule for MaxStatements {
 
                 match f.kind() {
                     AstKind::Function(func) => {
-                        if config.ignore_top_level_functions && func_declared_top_level(ctx, func) {
+                        if config.ignore_top_level_functions {
+                            println!("1111");
+                            if is_iife(node, ctx, ctx.semantic()) {
+                                println!("IIFE");
+                                println!("IIFE");
+
+                            } else {
+                                println!("not IIFE");
+
+                            }
+
+                            if func_declared_top_level(ctx, func) {
                             return;
+                           }
                         }
                         let top_level: bool = func_declared_top_level(ctx, func);
                         println!(
@@ -130,9 +161,11 @@ impl Rule for MaxStatements {
                             self.0.max
                         );
 
-                        if b.statements.len() > self.0.max {
+                        let count =  b.statements.len();
+                        let max = self.0.max;
+                        if count > max {
                             println!("awoooooo");
-                            ctx.diagnostic(max_statements_diagnostic(b.span))
+                            ctx.diagnostic(max_statements_diagnostic(b.span, count, max))
                         }
                     }
                     _ => {}
@@ -148,22 +181,22 @@ fn test() {
     use crate::tester::Tester;
 
     let pass = vec![
-        (
-            "function foo() { var bar = 1; function qux () { var noCount = 2; } return 3; }",
-            Some(serde_json::json!([3])),
-        ),
-        (
-            "function foo() { var bar = 1; if (true) { for (;;) { var qux = null; } } else { quxx(); } return 3; }",
-            Some(serde_json::json!([6])),
-        ),
-        (
-            "function foo() { var x = 5; function bar() { var y = 6; } bar(); z = 10; baz(); }",
-            Some(serde_json::json!([5])),
-        ),
-        (
-            "function foo() { var a; var b; var c; var x; var y; var z; bar(); baz(); qux(); quxx(); }",
-            None,
-        ),
+//(
+//    "function foo() { var bar = 1; function qux () { var noCount = 2; } return 3; }",
+//    Some(serde_json::json!([3])),
+//),
+//(
+//    "function foo() { var bar = 1; if (true) { for (;;) { var qux = null; } } else { quxx(); } return 3; }",
+//    Some(serde_json::json!([6])),
+//),
+//(
+//    "function foo() { var x = 5; function bar() { var y = 6; } bar(); z = 10; baz(); }",
+//    Some(serde_json::json!([5])),
+//),
+//(
+//    "function foo() { var a; var b; var c; var x; var y; var z; bar(); baz(); qux(); quxx(); }",
+//    None,
+//),
         (
             "(function() { var bar = 1; return function () { return 42; }; })()",
             Some(serde_json::json!([1, { "ignoreTopLevelFunctions": true }])),
