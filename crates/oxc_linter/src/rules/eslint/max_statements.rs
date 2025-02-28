@@ -2,16 +2,17 @@ use oxc_ast::AstKind;
 use oxc_ast::ast::Function;
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
-use oxc_semantic::{Semantic, ScopeId};
-use oxc_span::{Span, GetSpan};
+use oxc_semantic::{ScopeId, Semantic};
+use oxc_span::{GetSpan, Span};
 use serde_json::Value;
 
-use crate::{AstNode,ast_util::iter_outer_expressions, context::LintContext, rule::Rule};
-
+use crate::{AstNode, ast_util::{iter_outer_expressions, outermost_paren_parent}, context::LintContext, rule::Rule};
 
 fn max_statements_diagnostic(span: Span, count: usize, max: usize) -> OxcDiagnostic {
-    OxcDiagnostic::warn(format!("Function has too many statements ({count:?}). Maximum allowed is {max:?}."))
-        .with_label(span)
+    OxcDiagnostic::warn(format!(
+        "Function has too many statements ({count:?}). Maximum allowed is {max:?}."
+    ))
+    .with_label(span)
 }
 
 declare_oxc_lint!(
@@ -52,21 +53,16 @@ impl Default for MaxStatementsConfig {
     }
 }
 
-
+/*
 /// Iterate over parent nodes and see if callee contains span of the node.
 fn is_iife<'a>(node: &AstNode<'a>, ctx: &LintContext, semantic: &Semantic<'a>) -> bool {
-//let Some(AstKind::CallExpression(call)) = iter_outer_expressions(semantic, node.id()).next()
-//else {
-//return false;
-//};
-//call.callee.span().contains_inclusive(node.span())
-
-    let Some(parent) = get_parent_node(node, ctx) else {
+    let Some(AstKind::CallExpression(call)) = iter_outer_expressions(semantic, node.id()).next()
+    else {
         return false;
     };
-    matches!(parent.kind(), AstKind::CallExpression(_))
+    call.callee.span().contains_inclusive(node.span())
 }
-
+ */
 
 /// Returns true if the closed enclosing function body for this function is declared at the top
 /// level scope.
@@ -76,17 +72,23 @@ fn is_iife<'a>(node: &AstNode<'a>, ctx: &LintContext, semantic: &Semantic<'a>) -
 fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
     // could be faster when func.is_declaration() == true to just use func.scope_id and not get the declaration
 
-
     let decl_scope_id = if let Some(ident) = &func.id {
-        // function with an identifier so go to declaration
-        let symbol_table = ctx.semantic().symbols();
 
-        let func_decl_symbol_id = symbol_table.get_declaration(ident.symbol_id());
+        // function with an identifier so go to declaration
+        let symbols = ctx.semantic().symbols();
+        println!("1111111111111");
+
+        let func_decl_symbol_id = symbols.get_declaration(ident.symbol_id());
         ctx.nodes().get_node(func_decl_symbol_id).scope_id()
     } else {
+        println!("2222222 {func:?}");
+
         // Anonymous function so just use the scope id of this node which declares the function binding
         func.scope_id()
     };
+
+//if let Some(top_level_reference) =
+  //      resolve_global_binding(ident, decl_scope_id, ctx)
 
     ctx.scopes().get_flags(decl_scope_id).is_top()
 
@@ -108,9 +110,11 @@ impl Rule for MaxStatements {
             .and_then(|v| usize::try_from(v).ok())
             .unwrap_or(default_max);
 
-
         let Some(vec_config) = value.as_array() else {
-            return Self(Box::new(MaxStatementsConfig{ max: max_statements , ignore_top_level_functions: false}));
+            return Self(Box::new(MaxStatementsConfig {
+                max: max_statements,
+                ignore_top_level_functions: false,
+            }));
         };
 
         let ignore_top_level_functions = vec_config
@@ -135,19 +139,17 @@ impl Rule for MaxStatements {
                 match f.kind() {
                     AstKind::Function(func) => {
                         if config.ignore_top_level_functions {
-                            println!("1111");
-                            if is_iife(node, ctx, ctx.semantic()) {
-                                println!("IIFE");
-                                println!("IIFE");
-
-                            } else {
-                                println!("not IIFE");
-
-                            }
+//println!("1111");
+//if is_iife(node, ctx, ctx.semantic()) {
+//println!("IIFE");
+//println!("IIFE");
+//} else {
+//println!("not IIFE");
+//}
 
                             if func_declared_top_level(ctx, func) {
-                            return;
-                           }
+                                return;
+                            }
                         }
                         let top_level: bool = func_declared_top_level(ctx, func);
                         println!(
@@ -161,7 +163,7 @@ impl Rule for MaxStatements {
                             self.0.max
                         );
 
-                        let count =  b.statements.len();
+                        let count = b.statements.len();
                         let max = self.0.max;
                         if count > max {
                             println!("awoooooo");
@@ -181,22 +183,22 @@ fn test() {
     use crate::tester::Tester;
 
     let pass = vec![
-//(
-//    "function foo() { var bar = 1; function qux () { var noCount = 2; } return 3; }",
-//    Some(serde_json::json!([3])),
-//),
-//(
-//    "function foo() { var bar = 1; if (true) { for (;;) { var qux = null; } } else { quxx(); } return 3; }",
-//    Some(serde_json::json!([6])),
-//),
-//(
-//    "function foo() { var x = 5; function bar() { var y = 6; } bar(); z = 10; baz(); }",
-//    Some(serde_json::json!([5])),
-//),
-//(
-//    "function foo() { var a; var b; var c; var x; var y; var z; bar(); baz(); qux(); quxx(); }",
-//    None,
-//),
+        //(
+        //    "function foo() { var bar = 1; function qux () { var noCount = 2; } return 3; }",
+        //    Some(serde_json::json!([3])),
+        //),
+        //(
+        //    "function foo() { var bar = 1; if (true) { for (;;) { var qux = null; } } else { quxx(); } return 3; }",
+        //    Some(serde_json::json!([6])),
+        //),
+        //(
+        //    "function foo() { var x = 5; function bar() { var y = 6; } bar(); z = 10; baz(); }",
+        //    Some(serde_json::json!([5])),
+        //),
+        //(
+        //    "function foo() { var a; var b; var c; var x; var y; var z; bar(); baz(); qux(); quxx(); }",
+        //    None,
+        //),
         (
             "(function() { var bar = 1; return function () { return 42; }; })()",
             Some(serde_json::json!([1, { "ignoreTopLevelFunctions": true }])),
