@@ -1,5 +1,5 @@
 use oxc_ast::AstKind;
-use oxc_ast::ast::Function;
+use oxc_ast::ast::{Function, IfStatement, Statement, Statement::BlockStatement};
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
 use oxc_semantic::{ScopeId, Semantic};
@@ -95,6 +95,34 @@ fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
     //todo NEED TO CALL THIS RECURSEIVELY ON EACH FUNCTION BODY CONTAINING THIS ONE
 }
 
+/*
+fn count_if_stats (s: IfStatement) -> usize {
+    let conseq_count = if let
+       BlockStatement(b) = s.consequent {
+      b.statements.len()
+ } else  {
+     1
+ };
+
+    AstKind::IfStatement(IfStatement { consequent, alternate, ..}) => {
+        let conseq_count = if let
+           BlockStatement(b) = consequent {
+          b.statements.len()
+     } else  {
+         0
+     };
+
+        let alt_count = if let
+           BlockStatement(b) = alternate {
+          b.statements.len()
+     } else  {
+         0
+     };
+        alt_count + conseq_count
+
+
+}
+*/
 impl Rule for MaxStatements {
     fn from_configuration(value: serde_json::Value) -> Self {
         let default_max = 10;
@@ -102,8 +130,7 @@ impl Rule for MaxStatements {
         println!("config {value:?}");
 
         let max_statements =
-        // option is just a usize like 8.
-   value
+            value
             .get(0)
             .and_then(Value::as_number)
             .and_then(serde_json::Number::as_u64)
@@ -132,11 +159,45 @@ impl Rule for MaxStatements {
             AstKind::ArrowFunctionExpression(f) => {
                 let b = &f.body;
 
-                let count = b.statements.len();
+             //   let top_lvl_stmts_count = b.statements.len();
+                let statements_count = b
+                      .statements
+                      .iter()
+                      .fold(0,|acc, stmt| {
+
+
+                           match &stmt {
+                          Statement::IfStatement(s) => {
+                              println!("1111");
+
+                              let IfStatement { consequent, alternate, ..} = &**s else {
+                                  return acc + 1
+                              };
+                              let conseq_count : usize = if let
+                                 BlockStatement(b) = consequent {
+                                b.body.len()
+                           } else  {
+                               0
+                           };
+
+                              let alt_count : usize= if let
+                                 Some(BlockStatement(b)) = alternate {
+                                b.body.len()
+                           } else  {
+                               0
+                           };
+                             let if_stmts = alt_count + conseq_count;
+
+                             if if_stmts == 0 { acc + 1 } else { acc + if_stmts }
+                          },
+                          _ => acc + 1,
+                      } });
+
                 let max = self.0.max;
-                if count > max {
-                    println!("arrow");
-                    ctx.diagnostic(max_statements_diagnostic(b.span, count, max))
+                println!("stamt {statements_count:?}");
+
+                if statements_count > max {
+                    ctx.diagnostic(max_statements_diagnostic(b.span, statements_count, max))
                 }
             }
             AstKind::FunctionBody(b) => {
