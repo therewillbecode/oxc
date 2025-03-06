@@ -5,6 +5,7 @@ use oxc_macros::declare_oxc_lint;
 use oxc_semantic::{ScopeId, Semantic};
 use oxc_span::{GetSpan, Span};
 use serde_json::Value;
+use oxc_allocator::Vec;
 
 use crate::{AstNode, ast_util::{iter_outer_expressions, outermost_paren_parent}, context::LintContext, rule::Rule};
 
@@ -95,34 +96,39 @@ fn func_declared_top_level<'a>(ctx: &LintContext<'a>, func: &Function) -> bool {
     //todo NEED TO CALL THIS RECURSEIVELY ON EACH FUNCTION BODY CONTAINING THIS ONE
 }
 
-/*
-fn count_if_stats (s: IfStatement) -> usize {
-    let conseq_count = if let
-       BlockStatement(b) = s.consequent {
-      b.statements.len()
- } else  {
-     1
- };
 
-    AstKind::IfStatement(IfStatement { consequent, alternate, ..}) => {
-        let conseq_count = if let
-           BlockStatement(b) = consequent {
-          b.statements.len()
-     } else  {
-         0
-     };
+fn count_statements<'a> (s: &Vec<'a , Statement<'a>> ) -> usize {
+      s.iter()
+      .fold(0,|acc, stmt| {
+           match &stmt {
+          Statement::IfStatement(s) => {
+              println!("1111");
 
-        let alt_count = if let
-           BlockStatement(b) = alternate {
-          b.statements.len()
-     } else  {
-         0
-     };
-        alt_count + conseq_count
+              let IfStatement { consequent, alternate, ..} = &**s else {
+                  return acc + 1
+              };
+              let conseq_count : usize = if let
+                 BlockStatement(b) = consequent {
+                b.body.len()
+           } else  {
+               0
+           };
 
+              let alt_count : usize= if let
+                 Some(BlockStatement(b)) = alternate {
+                b.body.len()
+           } else  {
+               0
+           };
+             let if_stmts = alt_count + conseq_count;
 
-}
-*/
+             if if_stmts == 0 { acc + 1 } else { acc + if_stmts }
+          },
+          _ => acc + 1,
+      } })
+
+      }
+
 impl Rule for MaxStatements {
     fn from_configuration(value: serde_json::Value) -> Self {
         let default_max = 10;
@@ -159,39 +165,7 @@ impl Rule for MaxStatements {
             AstKind::ArrowFunctionExpression(f) => {
                 let b = &f.body;
 
-             //   let top_lvl_stmts_count = b.statements.len();
-                let statements_count = b
-                      .statements
-                      .iter()
-                      .fold(0,|acc, stmt| {
-
-
-                           match &stmt {
-                          Statement::IfStatement(s) => {
-                              println!("1111");
-
-                              let IfStatement { consequent, alternate, ..} = &**s else {
-                                  return acc + 1
-                              };
-                              let conseq_count : usize = if let
-                                 BlockStatement(b) = consequent {
-                                b.body.len()
-                           } else  {
-                               0
-                           };
-
-                              let alt_count : usize= if let
-                                 Some(BlockStatement(b)) = alternate {
-                                b.body.len()
-                           } else  {
-                               0
-                           };
-                             let if_stmts = alt_count + conseq_count;
-
-                             if if_stmts == 0 { acc + 1 } else { acc + if_stmts }
-                          },
-                          _ => acc + 1,
-                      } });
+               let statements_count = count_statements(&b.statements);
 
                 let max = self.0.max;
                 println!("stamt {statements_count:?}");
@@ -234,11 +208,12 @@ impl Rule for MaxStatements {
                             self.0.max
                         );
 
-                        let count = b.statements.len();
+                        let count_statements = count_statements(&b.statements);
+                        //count_statements
                         let max = self.0.max;
-                        if count > max {
+                        if count_statements > max {
                             println!("awoooooo");
-                            ctx.diagnostic(max_statements_diagnostic(b.span, count, max))
+                            ctx.diagnostic(max_statements_diagnostic(b.span, count_statements, max))
                         }
                     }
                     _ => {}
