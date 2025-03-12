@@ -94,40 +94,44 @@ impl JsxNoScriptUrl {
 
 impl Rule for JsxNoScriptUrl {
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
-        if let AstKind::JSXOpeningElement(element) = node.kind() {
-            let Some(component_name) = element.name.get_identifier_name() else {
-                return;
-            };
-            if let Some(link_props) = self.components.get(component_name.as_str()) {
-                for jsx_attribute in &element.attributes {
-                    if let JSXAttributeItem::Attribute(attr) = jsx_attribute {
-                        let Some(prop_value) = &attr.value else {
-                            return;
-                        };
-                        if prop_value.as_string_literal().is_some_and(|val| {
-                            link_props.contains(&attr.name.get_identifier().name.to_string())
-                                && JS_SCRIPT_REGEX.captures(&val.value).is_some()
-                        }) {
-                            ctx.diagnostic(jsx_no_script_url_diagnostic(attr.span()));
-                        }
-                    }
+        let AstKind::JSXOpeningElement(element) = node.kind() else {
+            return;
+        };
+
+        let Some(component_name) = element.name.get_identifier_name() else {
+            return;
+        };
+        if let Some(link_props) = self.components.get(component_name.as_str()) {
+            for jsx_attribute in &element.attributes {
+                let JSXAttributeItem::Attribute(attr) = jsx_attribute else {
+                    continue;
+                };
+                let Some(prop_value) = &attr.value else {
+                    return;
+                };
+                if prop_value.as_string_literal().is_some_and(|val| {
+                    link_props.contains(&attr.name.get_identifier().name.to_string())
+                        && JS_SCRIPT_REGEX.captures(&val.value).is_some()
+                }) {
+                    ctx.diagnostic(jsx_no_script_url_diagnostic(attr.span()));
                 }
-            } else if self.is_link_tag(component_name.as_str(), ctx) {
-                for jsx_attribute in &element.attributes {
-                    if let JSXAttributeItem::Attribute(attr) = jsx_attribute {
-                        let Some(prop_value) = &attr.value else {
-                            return;
-                        };
-                        if prop_value.as_string_literal().is_some_and(|val| {
-                            is_link_attribute(
-                                component_name.as_str(),
-                                attr.name.get_identifier().name.to_string(),
-                                ctx,
-                            ) && JS_SCRIPT_REGEX.captures(&val.value).is_some()
-                        }) {
-                            ctx.diagnostic(jsx_no_script_url_diagnostic(attr.span()));
-                        }
-                    }
+            }
+        } else if self.is_link_tag(component_name.as_str(), ctx) {
+            for jsx_attribute in &element.attributes {
+                let JSXAttributeItem::Attribute(attr) = jsx_attribute else {
+                    continue;
+                };
+                let Some(prop_value) = &attr.value else {
+                    return;
+                };
+                if prop_value.as_string_literal().is_some_and(|val| {
+                    is_link_attribute(
+                        component_name.as_str(),
+                        attr.name.get_identifier().name.to_string(),
+                        ctx,
+                    ) && JS_SCRIPT_REGEX.captures(&val.value).is_some()
+                }) {
+                    ctx.diagnostic(jsx_no_script_url_diagnostic(attr.span()));
                 }
             }
         }
