@@ -11,9 +11,6 @@ fn no_empty_pattern_diagnostic(pattern_type: &str, span: Span) -> OxcDiagnostic 
         .with_label(span)
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct NoEmptyPattern;
-
 declare_oxc_lint!(
     /// ### What it does
     /// Disallow empty destructuring patterns
@@ -73,11 +70,31 @@ declare_oxc_lint!(
     correctness,
 );
 
+#[derive(Debug, Default, Clone)]
+pub struct NoEmptyPattern {
+    allow_obj_patterns_as_params: bool,
+}
+
 impl Rule for NoEmptyPattern {
+    fn from_configuration(value: serde_json::Value) -> Self {
+        let obj = value.get(0);
+
+        Self {
+            allow_obj_patterns_as_params: obj
+                .and_then(|v| v.get("allowObjectPatternsAsParameters"))
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+        }
+    }
+
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
         let (pattern_type, span) = match node.kind() {
             AstKind::ArrayPattern(array) if array.is_empty() => ("array", array.span),
-            AstKind::ObjectPattern(object) if object.is_empty() => ("object", object.span),
+            AstKind::ObjectPattern(object)
+                if object.is_empty() && !self.allow_obj_patterns_as_params =>
+            {
+                ("object", object.span)
+            }
             _ => return,
         };
         ctx.diagnostic(no_empty_pattern_diagnostic(pattern_type, span));
@@ -97,6 +114,22 @@ fn test() {
         ("var [a] = foo", None),
         ("var {...x} = foo;", None),
         ("var [...x] = foo;", None),
+        (
+            "function foo({}) {}",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
+        (
+            "const bar = function({}) {};",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
+        (
+            "const qux = ({}) => {};",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
+        (
+            "function baz({} = {}) {}",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
     ];
 
     let fail = vec![
@@ -109,6 +142,30 @@ fn test() {
         ("function foo([]) {}", None),
         ("function foo({a: {}}) {}", None),
         ("function foo({a: []}) {}", None),
+        (
+            "function foo({a: {}}) {}",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
+        (
+            "const bar = function({a: {}}) {};",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
+        (
+            "const qux = ({a: {}}) => {};",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
+        (
+            "const quux = ({} = bar) => {};",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
+        (
+            "const item = ({} = { bar: 1 }) => {};",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
+        (
+            "function baz([]) {}",
+            Some(serde_json::json!([{ "allowObjectPatternsAsParameters": true }])),
+        ),
     ];
 
     Tester::new(NoEmptyPattern::NAME, NoEmptyPattern::PLUGIN, pass, fail).test_and_snapshot();
