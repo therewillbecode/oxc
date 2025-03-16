@@ -2001,6 +2001,7 @@ dependencies = [
  "oxc_span",
  "oxc_syntax",
  "pico-args",
+ "proptest",
  "rustc-hash",
  "seq-macro",
 ]

@@ -41,6 +41,7 @@ memchr = { workspace = true }
 oxc_ast = { workspace = true, features = ["serialize"] }
 oxc_ast_visit = { workspace = true, features = ["serialize"] }
 pico-args = { workspace = true }
+proptest = { workspace = true }
 
 [features]
 default = ["regular_expression"]

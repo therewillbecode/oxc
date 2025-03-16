@@ -589,6 +589,7 @@ impl<'a> PeepholeOptimizations {
 #[cfg(test)]
 mod test {
     use oxc_syntax::es_target::ESTarget;
+    use proptest::prelude::*;
 
     use crate::{
         CompressOptions,
@@ -601,6 +602,13 @@ mod test {
             run(source_text, Some(CompressOptions { target, ..CompressOptions::default() })),
             run(expected, None)
         );
+    }
+
+    proptest! {
+        #[test]
+        fn doesnt_crash(s in "\\PC*") {
+            test_same("true");
+        }
     }
 
     #[test]
