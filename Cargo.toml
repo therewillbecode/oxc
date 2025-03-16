@@ -22,7 +22,10 @@ rust-version = "1.85.0"
 absolute_paths_not_starting_with_crate = "warn"
 non_ascii_idents = "warn"
 unit-bindings = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(coverage_nightly)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(coverage)',
+    'cfg(coverage_nightly)',
+] }
 tail_expr_drop_order = "warn"
 unsafe_op_in_unsafe_fn = "warn"
 unused_unsafe = "warn"
@@ -33,14 +36,14 @@ all = { level = "warn", priority = -1 }
 dbg_macro = "warn"
 todo = "warn"
 unimplemented = "warn"
-print_stdout = "warn" # Must be opt-in
-print_stderr = "warn" # Must be opt-in
+print_stdout = "warn"     # Must be opt-in
+print_stderr = "warn"     # Must be opt-in
 allow_attributes = "warn"
 # I like the explicitness of this rule as it removes confusion around `clone`.
 # This increases readability, avoids `clone` mindlessly and heap allocating by accident.
 clone_on_ref_ptr = "warn"
 # These two are mutually exclusive, I like `mod.rs` files for better fuzzy searches on module entries.
-self_named_module_files = "warn" # "-Wclippy::mod_module_files"
+self_named_module_files = "warn"              # "-Wclippy::mod_module_files"
 empty_drop = "warn"
 empty_structs_with_brackets = "warn"
 exit = "warn"
@@ -98,8 +101,8 @@ redundant_clone = "warn"
 # cargo
 cargo = { level = "warn", priority = -1 }
 multiple_crate_versions = "allow"
-cargo_common_metadata = "allow" # FIXME
-doc_lazy_continuation = "allow" # FIXME
+cargo_common_metadata = "allow"           # FIXME
+doc_lazy_continuation = "allow"           # FIXME
 
 [workspace.dependencies]
 # publish = true
@@ -196,7 +199,9 @@ lazy_static = "1.5.0"
 log = "0.4.25"
 markdown = "1.0.0-alpha.22"
 memchr = "2.7.4"
-miette = { package = "oxc-miette", version = "2.1.2", features = ["fancy-no-syscall"] }
+miette = { package = "oxc-miette", version = "2.1.2", features = [
+    "fancy-no-syscall",
+] }
 mimalloc = "0.1.43"
 nonmax = "0.5.5"
 num-bigint = "0.4.6"
@@ -207,6 +212,7 @@ phf = "0.11.3"
 pico-args = "0.5.0"
 prettyplease = "0.2.29"
 project-root = "0.2.2"
+proptest = "0.9.6"
 rayon = "1.10.0"
 regex = "1.11.1"
 ropey = "1.6.1"
@@ -258,24 +264,24 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 strip = "symbols" # Set to `false` for debug information
-debug = false # Set to `true` for debug information
-panic = "abort" # Let it crash and force ourselves to write safe Rust
+debug = false     # Set to `true` for debug information
+panic = "abort"   # Let it crash and force ourselves to write safe Rust
 
 # Profile used for release mode, but with debugging information for profiling
 # and debugging. Use `cargo build --profile=release-with-debug` to build with this profile.
 [profile.release-with-debug]
 inherits = "release"
-strip = false # Keep debug information in binary
-debug = true # Include maximum amount of debug information
+strip = false        # Keep debug information in binary
+debug = true         # Include maximum amount of debug information
 
 # Profile for `cargo coverage`
 [profile.coverage]
 inherits = "release"
-opt-level = 2 # Compile faster
-codegen-units = 256 # Compile faster
-lto = "thin" # Faster compile time with thin LTO
+opt-level = 2           # Compile faster
+codegen-units = 256     # Compile faster
+lto = "thin"            # Faster compile time with thin LTO
 debug-assertions = true # Make sure `debug_assert!`s pass
-overflow-checks = true # Catch arithmetic overflow errors
+overflow-checks = true  # Catch arithmetic overflow errors
 
 # Profile for linting with release mode-like settings.
 # Catches lint errors which only appear in release mode.
