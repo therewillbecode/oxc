@@ -588,8 +588,13 @@ impl<'a> PeepholeOptimizations {
 
 #[cfg(test)]
 mod test {
+    use oxc_allocator::{Allocator, Box, IntoIn, Vec};
+    use oxc_ast::ast::{BooleanLiteral, Expression, LogicalExpression, LogicalOperator};
+    use oxc_codegen::{CodeGenerator, CodegenOptions};
+    use oxc_span::Span;
     use oxc_syntax::es_target::ESTarget;
     use proptest::prelude::*;
+    use std::borrow::Cow;
 
     use crate::{
         CompressOptions,
@@ -605,9 +610,26 @@ mod test {
     }
 
     proptest! {
+
         #[test]
         fn doesnt_crash(s in "\\PC*") {
-            test_same("true");
+            let alloc = Allocator::new(); // ugh no
+
+
+            let lb = BooleanLiteral{span: Span::empty(0), value: true};
+            let rb = BooleanLiteral{span: Span::empty(0), value: true};
+            let left : Expression = Expression::BooleanLiteral(Box::new_in(lb, &alloc));
+            let right : Expression = Expression::BooleanLiteral(Box::new_in(rb, &alloc));
+            let operator : LogicalOperator = LogicalOperator::Or;
+            let span : Span = Span::empty(0);
+            let a = LogicalExpression { left, right, operator, span};
+            //let ad = a.
+            //let mut program = ret.program;
+            let mut codegen = CodeGenerator::new();
+             codegen.print_expression(&Expression::LogicalExpression((Box::new_in(a, &alloc))));
+            let s: String = codegen.into_source_text();
+
+            test_same(s.as_str());
         }
     }
 
