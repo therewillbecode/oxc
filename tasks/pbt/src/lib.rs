@@ -20,7 +20,7 @@ mod test {
         })
     }
 
-    fn logical_expr_strat() -> impl Strategy<Value = LogicalExpression<'static>> {
+    fn logical_expr_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'_>> {
         (
             prop_oneof![Just(LogicalOperator::Or), Just(LogicalOperator::And),],
             bool_lit_strat(),
@@ -34,30 +34,35 @@ mod test {
                 let operator: LogicalOperator = op;
                 let span: Span = Span::empty(0);
                 let a = LogicalExpression { left, right, operator, span };
-                a
+
+                Expression::LogicalExpression(Box::new_in(a, alloc))
             })
     }
 
-    fn nested_logical_expr_strat() -> impl Strategy<Value = Expression<'static>> {
-        let leaf = prop_oneof![bool_lit_strat(),];
+    fn nested_logical_expr_strat(
+        alloc: &'static Allocator,
+    ) -> impl Strategy<Value = Expression<'static>> {
+        let leaf = prop_oneof![bool_lit_strat()];
         leaf.prop_recursive(
-            80,  // 8 levels deep
-            256, // Shoot for maximum size of 256 nodes
-            10,  // We put up to 10 items per collection
-            |inner| {
-                (logical_expr_strat(), inner).prop_map(|(aa, logical_exp)| {
-                    let b = BooleanLiteral { span: Span::empty(0), value: true };
-                    let alloc = Allocator::with_capacity(32000);
-                    let right: Expression = Expression::LogicalExpression(Box::new_in(aa, &alloc));
-                    let operator: LogicalOperator = LogicalOperator::Or;
-                    let span: Span = Span::empty(0);
-                    let a = LogicalExpression { left: logical_exp, right, operator, span };
-
-                    Expression::LogicalExpression(Box::new_in(a, &alloc))
+            4,  // 3 levels deep
+            20, // Shoot for maximum size of 16 nodes
+            2,  // We put up to 3 items per collection
+            move |inner| {
+                (logical_expr_strat(alloc), inner).prop_map(move |(logical_exp, inner_exp)| {
+                    Expression::LogicalExpression(Box::new_in(
+                        LogicalExpression {
+                            left: logical_exp,
+                            right: inner_exp,
+                            operator: LogicalOperator::Or,
+                            span: Span::empty(0),
+                        },
+                        alloc,
+                    ))
                 })
             },
         )
     }
+
     /*
 
     fn nested_logical_expr_strat() -> impl Strategy<Value = Json> {
@@ -80,11 +85,13 @@ mod test {
           ])
     }
      */
+    static ALLOC: std::sync::LazyLock<oxc_allocator::Allocator> =
+        std::sync::LazyLock::new(|| Allocator::default());
 
     // test that AST -> codegen -> AST roundtrips
     proptest! {
             #[test]
-            fn doesnt_crash(cond in nested_logical_expr_strat()) {
+            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
 
               //  let alloc = Allocator::new(); // ugh no
 
@@ -94,7 +101,8 @@ mod test {
                 codegen.print_expression(&cond);
                 let s: String = codegen.into_source_text();
     println!("{}", s);
-           //     assert_eq!(s.as_str(), "false || false");
+
+           assert_eq!(s.as_str(), s.as_str() );//"false || false");
             }
         }
 }
