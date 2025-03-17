@@ -615,7 +615,6 @@ mod test {
         fn doesnt_crash(s in "\\PC*") {
             let alloc = Allocator::new(); // ugh no
 
-
             let lb = BooleanLiteral{span: Span::empty(0), value: true};
             let rb = BooleanLiteral{span: Span::empty(0), value: true};
             let left : Expression = Expression::BooleanLiteral(Box::new_in(lb, &alloc));
@@ -626,7 +625,7 @@ mod test {
             //let ad = a.
             //let mut program = ret.program;
             let mut codegen = CodeGenerator::new();
-             codegen.print_expression(&Expression::LogicalExpression((Box::new_in(a, &alloc))));
+             codegen.print_expression(&Expression::LogicalExpression(Box::new_in(a, &alloc)));
             let s: String = codegen.into_source_text();
 
             test_same(s.as_str());
