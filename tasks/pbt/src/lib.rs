@@ -106,7 +106,15 @@ mod test {
             }
         }
 
-
+//    test that AST -> codegen -> lint --fix - > Always parses
+//    proptest! {
+//            #[test]
+//            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
+//
+//            }
+//        }
+//
+//
 //    test that AST -> codegen -> Minifier - > Always parses
 //    proptest! {
 //            #[test]
@@ -122,4 +130,6 @@ mod test {
 //
 //            }
 //        }
+//
+
 }
