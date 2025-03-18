@@ -46,7 +46,7 @@ mod test {
         leaf.prop_recursive(
             4,  // 3 levels deep
             20, // Shoot for maximum size of 16 nodes
-            2,  // We put up to 3 items per collection
+            4,  // We put up to 3 items per collection
             move |inner| {
                 (logical_expr_strat(alloc), inner).prop_map(move |(logical_exp, inner_exp)| {
                     Expression::LogicalExpression(Box::new_in(
