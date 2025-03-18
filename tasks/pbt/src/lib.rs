@@ -105,4 +105,21 @@ mod test {
            assert_eq!(s.as_str(), s.as_str() );//"false || false");
             }
         }
+
+
+//    test that AST -> codegen -> Minifier - > Always parses
+//    proptest! {
+//            #[test]
+//            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
+//
+//            }
+//        }
+//
+//     test that AST -> codegen -> prettier - > Always parses
+//    proptest! {
+//            #[test]
+//            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
+//
+//            }
+//        }
 }
