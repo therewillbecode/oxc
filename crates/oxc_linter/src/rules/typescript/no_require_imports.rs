@@ -9,7 +9,11 @@ use oxc_macros::declare_oxc_lint;
 use oxc_semantic::IsGlobalReference;
 use oxc_span::{CompactStr, Span};
 
-use crate::{AstNode, context::LintContext, rule::Rule};
+use crate::{
+    AstNode,
+    context::{ContextHost, LintContext},
+    rule::Rule,
+};
 
 fn no_require_imports_diagnostic(span: Span) -> OxcDiagnostic {
     OxcDiagnostic::warn("Expected \"import\" statement instead of \"require\" call")
@@ -142,6 +146,10 @@ impl Rule for NoRequireImports {
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false),
         }))
+    }
+
+    fn should_run(&self, ctx: &ContextHost) -> bool {
+        ctx.source_type().is_typescript()
     }
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
