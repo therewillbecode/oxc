@@ -12,10 +12,10 @@ mod test {
     use oxc_syntax::es_target::ESTarget;
     use proptest::prelude::*;
 
-    fn bool_lit_strat() -> impl Strategy<Value = Expression<'static>> {
-        (proptest::bool::weighted(0.5)).prop_map(|x| {
+    fn bool_lit_strat (alloc: &Allocator) -> impl Strategy<Value = Expression<'static>> {
+        (proptest::bool::weighted(0.5)).prop_map(move |x| {
             let b = BooleanLiteral { span: Span::empty(0), value: x };
-            let alloc = Allocator::default();
+            //let alloc = Allocator::default();
             Expression::BooleanLiteral(Box::new_in(b, &alloc))
         })
     }
@@ -23,8 +23,8 @@ mod test {
     fn logical_expr_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'_>> {
         (
             prop_oneof![Just(LogicalOperator::Or), Just(LogicalOperator::And),],
-            bool_lit_strat(),
-            bool_lit_strat(),
+            bool_lit_strat(alloc),
+            bool_lit_strat(alloc),
         )
             .prop_map(|(op, l, r)| {
                 // let lb = BooleanLiteral { span: Span::empty(0), value: x };
@@ -42,7 +42,7 @@ mod test {
     fn nested_logical_expr_strat(
         alloc: &'static Allocator,
     ) -> impl Strategy<Value = Expression<'static>> {
-        let leaf = prop_oneof![bool_lit_strat()];
+        let leaf = prop_oneof![bool_lit_strat(alloc)];
         leaf.prop_recursive(
             4,  // 3 levels deep
             20, // Shoot for maximum size of 16 nodes
