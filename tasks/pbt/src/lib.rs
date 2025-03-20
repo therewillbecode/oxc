@@ -12,7 +12,7 @@ mod test {
     use oxc_syntax::es_target::ESTarget;
     use proptest::prelude::*;
 
-    fn bool_lit_strat (alloc: &Allocator) -> impl Strategy<Value = Expression<'static>> {
+    fn bool_lit_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'static>> {
         (proptest::bool::weighted(0.5)).prop_map(move |x| {
             let b = BooleanLiteral { span: Span::empty(0), value: x };
             //let alloc = Allocator::default();
@@ -106,30 +106,39 @@ mod test {
             }
         }
 
-//    test that AST -> codegen -> lint --fix - > Always parses
-//    proptest! {
-//            #[test]
-//            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
-//
-//            }
-//        }
-//
-//
-//    test that AST -> codegen -> Minifier - > Always parses
-//    proptest! {
-//            #[test]
-//            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
-//
-//            }
-//        }
-//
-//     test that AST -> codegen -> prettier - > Always parses
-//    proptest! {
-//            #[test]
-//            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
-//
-//            }
-//        }
-//
+    //    test that AST -> codegen -> lint --fix - > Always parses
+    //    proptest! {
+    //            #[test]
+    //            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
+    //
+    //            }
+    //        }
+    //
+    //
+    //    test that AST -> codegen -> Minifier - > Always parses
+    //    proptest! {
+    //            #[test]
+    //            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
+    //
+    //            }
+    //        }
+    //
+    //     test that AST -> codegen -> prettier - > Always parses
+    //    proptest! {
+    //            #[test]
+    //            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
+    //
+    //            }
+    //        }
+    //
 
+    // Parser
+    //
+    // Ensuring AST for TypeScript types is aligned with the standard "TS-ESLint" to ensure
+    // tool interopability.
+    //
+    // https://github.com/oxc-project/oxc/issues/9705
+    //
+    // // test roundtripping from our AST to back again produces the same ast
+    // test that AST -> codegen -> Parse with TS-ESLINT -> Print with TS-ESLINT -> codegen -> BackTo Our AST
 }
