@@ -52,6 +52,36 @@ mod test {
         )
     }
 
+    #[test]
+    fn repro() {
+        let original_src = "false ? false || false && false : false;\n";
+
+        //  Source Text -> AST1
+        let parseOpt = oxc_parser::ParseOptions::default();
+        let parsed_ast =
+            oxc_parser::Parser::new(&ALLOC, &original_src, oxc_ast::ast::SourceType::ts())
+                .with_options(parseOpt)
+                .parse();
+        let parsed_ast_program: Program = parsed_ast.program;
+        println!("AST1: {parsed_ast_program:#?}");
+
+        // AST1 -> Source Text
+        let mut codegen = Codegen::new();
+        parsed_ast_program.r#gen(&mut codegen, Context::default());
+        let src_text_two: String = codegen.into_source_text();
+
+        // Source Text -> AST2
+        let parsed_ast_two =
+            oxc_parser::Parser::new(&ALLOC, &src_text_two, oxc_ast::ast::SourceType::ts())
+                .with_options(parseOpt)
+                .parse();
+        let parsed_ast_program_two: Program = parsed_ast_two.program;
+        println!("AST2: {parsed_ast_program_two:#?}");
+
+        // AST1 should equal AST2
+        assert!(parsed_ast_program_two.content_eq(&parsed_ast_program));
+    }
+
     fn logical_expr_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'_>> {
         (
             prop_oneof![Just(LogicalOperator::Or), Just(LogicalOperator::And)],
@@ -142,6 +172,7 @@ mod test {
             let mut body: Vec<'_, Statement> = Vec::new_in(&ALLOC);
 
             body.push(expr);
+            //  body.push("\n");
 
             let init_program: Program = Program {
                 span: Span::empty(0),
