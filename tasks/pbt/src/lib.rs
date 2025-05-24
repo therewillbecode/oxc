@@ -58,35 +58,13 @@ mod test {
         )
     }
 
-    /*
-
-    fn nested_logical_expr_strat() -> impl Strategy<Value = Json> {
-        let leaf = prop_oneof![
-            bool_lit_strat(),
-            any::<bool>().prop_map(Json::Bool),
-            any::<f64>().prop_map(Json::Number),
-            ".*".prop_map(Json::String),
-        ];
-        leaf.prop_recursive(
-          8, // 8 levels deep
-          256, // Shoot for maximum size of 256 nodes
-          10, // We put up to 10 items per collection
-          |inner| prop_oneof![
-              // Take the inner strategy and make the two recursive cases.
-              prop::collection::vec(inner.clone(), 0..10)
-                  .prop_map(Json::Array),
-              prop::collection::hash_map(".*", inner, 0..10)
-                  .prop_map(Json::Map),
-          ])
-    }
-     */
     static ALLOC: std::sync::LazyLock<oxc_allocator::Allocator> =
         std::sync::LazyLock::new(|| Allocator::default());
 
     // test that AST -> codegen -> AST roundtrips
     proptest! {
             #[test]
-            fn doesnt_crash(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+            fn ast_logical_expr_rndtrips(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
 
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
