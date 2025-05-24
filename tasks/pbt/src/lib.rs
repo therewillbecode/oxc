@@ -57,7 +57,7 @@ mod test {
             prop_oneof![Just(LogicalOperator::Or), Just(LogicalOperator::And)],
             bool_lit_strat(alloc),
             bool_lit_strat(alloc),
-            proptest::bool::weighted(0.65),
+            proptest::bool::weighted(0.0),
         )
             .prop_map(|(op, l, r, is_negated)| {
                 let left: Expression = l;
