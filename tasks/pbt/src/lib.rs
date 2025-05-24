@@ -52,9 +52,9 @@ mod test {
 
     fn conditional_expr(alloc: &'static Allocator) -> impl Strategy<Value = Expression<'static>> {
         (
-            nested_logical_expr_strat(alloc),
-            nested_logical_expr_strat(alloc),
-            nested_logical_expr_strat(alloc),
+               prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
+               prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
+               prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
         )
             .prop_map(|(l, r, t)| {
                 let test: Expression = t;
@@ -96,7 +96,7 @@ mod test {
     // test that AST -> codegen ->  fmt -> parse doesnt crash
         proptest! {
                 #[test]
-                fn ast_expr_code_gen_fmts_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+                fn ast_expr_code_gen_fmts_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
 
                     // AST -> Source Text
                     let mut codegen = Codegen::new();
