@@ -3,7 +3,10 @@ use oxc_span::{ContentEq, GetSpan};
 #[cfg(test)]
 mod test {
     use oxc_allocator::{Allocator, Box, IntoIn, Vec};
-    use oxc_ast::ast::{BooleanLiteral, UnaryExpression,UnaryOperator, ParenthesizedExpression, Expression,ConditionalExpression, LogicalExpression, LogicalOperator};
+    use oxc_ast::ast::{
+        BooleanLiteral, ConditionalExpression, Expression, LogicalExpression, LogicalOperator,
+        ParenthesizedExpression, UnaryExpression, UnaryOperator,
+    };
     use oxc_codegen::{Codegen, CodegenOptions};
 
     use oxc_mangler::MangleOptions;
@@ -17,14 +20,13 @@ mod test {
     use std::process::Command;
 
     use std::fs::File;
-    use std::io::prelude::*;
     use std::io::Result;
+    use std::io::prelude::*;
 
     fn write_file(file_path: &str, contents: &str) -> Result<()> {
         let mut file = File::create(file_path)?;
         file.write_all(contents.as_bytes())
     }
-
 
     fn bool_lit_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'static>> {
         (proptest::bool::weighted(0.5)).prop_map(move |x| {
@@ -38,7 +40,7 @@ mod test {
             prop_oneof![Just(LogicalOperator::Or), Just(LogicalOperator::And),],
             bool_lit_strat(alloc),
             bool_lit_strat(alloc),
-            proptest::bool::weighted(0.25)
+            proptest::bool::weighted(0.25),
         )
             .prop_map(|(op, l, r, is_negated)| {
                 let left: Expression = l;
@@ -50,21 +52,23 @@ mod test {
                 if !is_negated {
                     Expression::LogicalExpression(Box::new_in(a, alloc))
                 } else {
-                    Expression::UnaryExpression(Box::new_in(UnaryExpression {
-                         span: Span::empty(0),
-                         operator: UnaryOperator::LogicalNot,
-                         argument:  Expression::LogicalExpression(Box::new_in(a, alloc))
-
-                    }, alloc))
+                    Expression::UnaryExpression(Box::new_in(
+                        UnaryExpression {
+                            span: Span::empty(0),
+                            operator: UnaryOperator::LogicalNot,
+                            argument: Expression::LogicalExpression(Box::new_in(a, alloc)),
+                        },
+                        alloc,
+                    ))
                 }
             })
     }
 
     fn conditional_expr(alloc: &'static Allocator) -> impl Strategy<Value = Expression<'static>> {
         (
-               prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
-               prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
-               prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
+            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
+            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
+            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
         )
             .prop_map(|(l, r, t)| {
                 let test: Expression = t;
@@ -81,69 +85,74 @@ mod test {
         alloc: &'static Allocator,
     ) -> impl Strategy<Value = Expression<'static>> {
         let leaf = prop_oneof![bool_lit_strat(alloc)];
+        let is_negated = proptest::bool::weighted(0.25);
+        let is_and = proptest::bool::weighted(0.50);
+
         leaf.prop_recursive(
-            40,  // 3 levels deep
+            40, // 3 levels deep
             30, // Shoot for maximum size of 16 nodes
             2,  // We put up to 3 items per collection
             move |inner| {
-                (logical_expr_strat(alloc), inner).prop_map(move |(logical_exp, inner_exp)| {
-                    Expression::LogicalExpression(Box::new_in(
-                        LogicalExpression {
-                            left: logical_exp,
-                            right: inner_exp,
-                            operator: LogicalOperator::Or,
-                            span: Span::empty(0),
-                        },
-                        alloc,
-                    ))
-                })
+                (logical_expr_strat(alloc), is_negated, is_and, inner).prop_map(
+                    move |(logical_exp, is_negated, is_and, inner_exp)| {
+                        let operator =
+                            if is_and { LogicalOperator::And } else { LogicalOperator::Or };
+
+                        Expression::LogicalExpression(Box::new_in(
+                            LogicalExpression {
+                                left: logical_exp,
+                                right: inner_exp,
+                                operator,
+                                span: Span::empty(0),
+                            },
+                            alloc,
+                        ))
+                    },
+                )
             },
         )
     }
 
-
-
     // test that AST -> codegen ->  fmt -> parse doesnt crash
-        proptest! {
-                #[test]
-                fn ast_expr_code_gen_fmts_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
+    proptest! {
+            #[test]
+            fn ast_expr_code_gen_fmts_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
 
-                    // AST -> Source Text
-                    let mut codegen = Codegen::new();
+                // AST -> Source Text
+                let mut codegen = Codegen::new();
 
-                    codegen.print_expression(&inital_logic_exp);
-
-
-                    let original_source_text: String = codegen.into_source_text();
+                codegen.print_expression(&inital_logic_exp);
 
 
-        println!("{}", original_source_text);
-
-               // Source Text -> AST -> Fmt -> Fmted Source Text
-                let  parseOpt = oxc_parser::ParseOptions::default();
-                    let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
-                   .with_options(parseOpt)
-                   .parse();
-
-                let fmt_options = oxc_formatter::FormatOptions::default();
-                 let fmted_src =
-                 oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
-
-                 println!("{fmted_src}");
+                let original_source_text: String = codegen.into_source_text();
 
 
-                 // should not crash when parsing the fmted source text again
-                  let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
-                 .with_options(parseOpt)
-                 .parse();
+    println!("{}", original_source_text);
+
+           // Source Text -> AST -> Fmt -> Fmted Source Text
+            let  parseOpt = oxc_parser::ParseOptions::default();
+                let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
+               .with_options(parseOpt)
+               .parse();
+
+            let fmt_options = oxc_formatter::FormatOptions::default();
+             let fmted_src =
+             oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
+
+             println!("{fmted_src}");
 
 
-                }
+             // should not crash when parsing the fmted source text again
+              let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
+             .with_options(parseOpt)
+             .parse();
+
+
             }
+        }
 
     static ALLOC: std::sync::LazyLock<oxc_allocator::Allocator> =
         std::sync::LazyLock::new(|| Allocator::default());
-
 
     // test that AST -> codegen -> AST roundtrips
     proptest! {
@@ -198,99 +207,13 @@ mod test {
             }
         }
 
-
-
-
     //    test that AST -> codegen -> lint apply "safe" fixes - > Always parses without crash
     proptest! {
-            #[test]
-            fn ast_logical_expr_lint_fix_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
-
-                // AST -> Source Text
-                let mut codegen = Codegen::new();
-                codegen.print_expression(&inital_logic_exp);
-
-                let original_source_text: String = codegen.into_source_text();
-
-
-    println!("{}", original_source_text);
-
-write_file("pbt.ts", &original_source_text).expect("failed to write file");
-
-    let output = Command::new("oxlint")
-                         .args(["pbt.ts", "--fix-suggestions"])
-                       //  .arg("-A all")
-                       // .arg
-                         .output()
-                         .expect("failed to execute process");
-
-    println!("status: {}", output.status);
-    println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-
-    let fixed_src =  std::fs::read_to_string("pbt.ts").expect("failed to read fixed src");
-           // Source Text -> AST -> Fmt -> Fmted Source Text
-      /*
-           let  parseOpt = oxc_parser::ParseOptions::default();
-                let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
-               .with_options(parseOpt)
-               .parse();
-
-            let fmt_options = oxc_linter::FormatOptions::default();
-             let fmted_src =
-             oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
-*/
-          //   println!("{fmted_src}");
-
-             // should not crash when parsing the fixed source text again
-             let  parseOpt = oxc_parser::ParseOptions::default();
-             let parsed_fixed_src = oxc_parser::Parser::new(&ALLOC, &fixed_src, oxc_ast::ast::SourceType::ts())
-             .with_options(parseOpt)
-             .parse();
-
-
-             println!("{:?}",fixed_src)
-            }
-        }
-
-
-
-
-        fn minify(
-            allocator: &Allocator,
-            source_text: &str,
-            source_type: SourceType,
-            mangle: bool,
-            nospace: bool,
-        ) -> String {
-            let ret = Parser::new(allocator, source_text, source_type).parse();
-            let mut program = ret.program;
-            let options = MinifierOptions {
-                mangle: mangle.then(MangleOptions::default),
-                compress: Some(CompressOptions::default()),
-            };
-            let ret = Minifier::new(options).build(allocator, &mut program);
-            Codegen::new()
-                .with_options(CodegenOptions {
-                    minify: nospace,
-                    comments: false,
-                    annotation_comments: false,
-                    legal_comments: oxc_codegen::LegalComment::Eof,
-                    ..CodegenOptions::default()
-                })
-                .with_scoping(ret.scoping)
-                .build(&program)
-                .code
-        }
-
-
-        //  AST -> Minifier -> Source Txt -> Parses without crash
-        proptest! {
                 #[test]
-                fn ast_expr_code_gen_minify_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
+                fn ast_logical_expr_lint_fix_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
 
                     // AST -> Source Text
                     let mut codegen = Codegen::new();
-                    codegen.print_str("return ");
                     codegen.print_expression(&inital_logic_exp);
 
                     let original_source_text: String = codegen.into_source_text();
@@ -298,26 +221,102 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
 
         println!("{}", original_source_text);
 
+    write_file("pbt.ts", &original_source_text).expect("failed to write file");
 
+        let output = Command::new("oxlint")
+                             .args(["pbt.ts", "--fix-suggestions"])
+                           //  .arg("-A all")
+                           // .arg
+                             .output()
+                             .expect("failed to execute process");
 
-                let minified_src = minify(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts(), true, true);
+        println!("status: {}", output.status);
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
 
-                 println!("minified: {}, original: {}", minified_src, original_source_text);
+        let fixed_src =  std::fs::read_to_string("pbt.ts").expect("failed to read fixed src");
+               // Source Text -> AST -> Fmt -> Fmted Source Text
+          /*
+               let  parseOpt = oxc_parser::ParseOptions::default();
+                    let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
+                   .with_options(parseOpt)
+                   .parse();
 
+                let fmt_options = oxc_linter::FormatOptions::default();
+                 let fmted_src =
+                 oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
+    */
+              //   println!("{fmted_src}");
 
-                 // should not crash when parsing the minified source text again
+                 // should not crash when parsing the fixed source text again
                  let  parseOpt = oxc_parser::ParseOptions::default();
-                 let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &minified_src, oxc_ast::ast::SourceType::ts())
+                 let parsed_fixed_src = oxc_parser::Parser::new(&ALLOC, &fixed_src, oxc_ast::ast::SourceType::ts())
                  .with_options(parseOpt)
                  .parse();
-          //       let mut program = parsed_fmted_ast.program;
-           //      println!("{program:#?}");
 
 
-
+                 println!("{:?}",fixed_src)
                 }
             }
 
+    fn minify(
+        allocator: &Allocator,
+        source_text: &str,
+        source_type: SourceType,
+        mangle: bool,
+        nospace: bool,
+    ) -> String {
+        let ret = Parser::new(allocator, source_text, source_type).parse();
+        let mut program = ret.program;
+        let options = MinifierOptions {
+            mangle: mangle.then(MangleOptions::default),
+            compress: Some(CompressOptions::default()),
+        };
+        let ret = Minifier::new(options).build(allocator, &mut program);
+        Codegen::new()
+            .with_options(CodegenOptions {
+                minify: nospace,
+                comments: false,
+                annotation_comments: false,
+                legal_comments: oxc_codegen::LegalComment::Eof,
+                ..CodegenOptions::default()
+            })
+            .with_scoping(ret.scoping)
+            .build(&program)
+            .code
+    }
+
+    //  AST -> Minifier -> Source Txt -> Parses without crash
+    proptest! {
+            #[test]
+            fn ast_expr_code_gen_minify_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
+
+                // AST -> Source Text
+                let mut codegen = Codegen::new();
+                codegen.print_str("return ");
+                codegen.print_expression(&inital_logic_exp);
+
+                let original_source_text: String = codegen.into_source_text();
 
 
+    println!("{}", original_source_text);
+
+
+
+            let minified_src = minify(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts(), true, true);
+
+             println!("minified: {}, original: {}", minified_src, original_source_text);
+
+
+             // should not crash when parsing the minified source text again
+             let  parseOpt = oxc_parser::ParseOptions::default();
+             let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &minified_src, oxc_ast::ast::SourceType::ts())
+             .with_options(parseOpt)
+             .parse();
+      //       let mut program = parsed_fmted_ast.program;
+       //      println!("{program:#?}");
+
+
+
+            }
+        }
 }
