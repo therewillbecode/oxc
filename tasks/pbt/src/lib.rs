@@ -50,11 +50,11 @@ mod test {
             })
     }
 
-    fn conditional_expr(alloc: &Allocator) -> impl Strategy<Value = Expression<'_>> {
+    fn conditional_expr(alloc: &'static Allocator) -> impl Strategy<Value = Expression<'static>> {
         (
-            logical_expr_strat(alloc),
-            logical_expr_strat(alloc),
-            logical_expr_strat(alloc),
+            nested_logical_expr_strat(alloc),
+            nested_logical_expr_strat(alloc),
+            nested_logical_expr_strat(alloc),
         )
             .prop_map(|(l, r, t)| {
                 let test: Expression = t;
@@ -96,7 +96,7 @@ mod test {
     // test that AST -> codegen ->  fmt -> parse doesnt crash
         proptest! {
                 #[test]
-                fn ast_logical_expr_code_gen_fmts_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+                fn ast_expr_code_gen_fmts_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
 
                     // AST -> Source Text
                     let mut codegen = Codegen::new();
@@ -242,7 +242,7 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
             }
         }
 
-        */
+
 
 
         fn minify(
@@ -307,6 +307,7 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
 
                 }
             }
+                 */
 
 
 }
