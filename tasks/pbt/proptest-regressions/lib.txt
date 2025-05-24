@@ -1,9 +1,2 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc e93d29d18778aa677853b8a3a2518161a600c298ecf628def59d4f85fab69ced # shrinks to s = ""
-cc bf639aaf1b5f57a7a9114376116a6eb783ac538889d76746897d2c897e3841b2 # shrinks to inital_logic_exp = BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: false })
-cc 274bfd5a6fa934aa74f73487b3dc73547c9760d496772027c72390efae4fc367 # shrinks to inital_logic_exp = LogicalExpression(LogicalExpression { span: Span { start: 0, end: 0 }, left: LogicalExpression(LogicalExpression { span: Span { start: 0, end: 0 }, left: BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: true }), right: BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: true }), operator: Or }), right: BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: true }), operator: Or })
+
+cc 7e578d9007d4649fad07ff5438f4db890e4033343248b5810cd8ee992840abae # shrinks to mut original_program = Program { span: Span { start: 0, end: 0 }, source_text: "", comments: Vec([]), hashbang: None, directives: Vec([]), body: Vec([ExpressionStatement(ExpressionStatement { span: Span { start: 0, end: 0 }, expression: ConditionalExpression(ConditionalExpression { span: Span { start: 0, end: 0 }, test: BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: false }), consequent: LogicalExpression(LogicalExpression { span: Span { start: 0, end: 0 }, left: LogicalExpression(LogicalExpression { span: Span { start: 0, end: 0 }, left: BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: false }), right: BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: false }), operator: Or }), right: BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: false }), operator: And }), alternate: BooleanLiteral(BooleanLiteral { span: Span { start: 0, end: 0 }, value: false }) }) })]), scope_id: Cell { value: None }, source_type: SourceType { language: TypeScript, module_kind: Module, variant: Standard } }

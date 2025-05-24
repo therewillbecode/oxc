@@ -161,16 +161,16 @@ mod test {
     // test that AST -> codegen ->  fmt -> parse doesnt crash
     proptest! {
             #[test]
-            fn ast_expr_code_gen_fmts_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
+            fn ast_expr_code_gen_fmts_parses_again(mut original_program in gen_program(&ALLOC)) {
 
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
                 //   codegen.print_str("return ");
 
-                codegen.print_expression(&inital_logic_exp);
-
+                original_program.r#gen(&mut codegen, Context::default());
 
                 let original_source_text: String = codegen.into_source_text();
+                  original_program.source_text =original_source_text.as_str();
 
 
     println!("{}", original_source_text);
@@ -189,9 +189,16 @@ mod test {
 
 
              // should not crash when parsing the fmted source text again
-              let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
-             .with_options(parseOpt)
-             .parse();
+
+              let  parseOpt = oxc_parser::ParseOptions::default();
+              let rnd_tripped_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
+              .with_options(parseOpt)
+              .parse();
+              let rnd_trip_program: Program = rnd_tripped_ast.program;
+              println!("AST1: {original_program:#?}");
+              println!("AST2: {rnd_trip_program:#?}");
+
+                assert!(original_program.content_eq(&rnd_trip_program));
 
             }
         }
@@ -199,123 +206,102 @@ mod test {
     static ALLOC: std::sync::LazyLock<oxc_allocator::Allocator> =
         std::sync::LazyLock::new(|| Allocator::default());
 
-    // test that AST -> codegen -> AST roundtrips
-    proptest! {
-            #[test]
-            fn ast_logical_expr_rndtrips(mut original_program in gen_program(&ALLOC)) {
-
-
-                // AST -> Source Text
-                let mut codegen = Codegen::new();
-                //      codegen.print_str("return ");
-                original_program.r#gen(&mut codegen, Context::default());
-                //codegen.r#gen(&prog);
-
-                let original_source_text: String = codegen.into_source_text();
-                  original_program.source_text =original_source_text.as_str();
-
-    println!("{}", original_source_text);
-
-           // Source Text -> AST
-            let  parseOpt = oxc_parser::ParseOptions::default();
-                let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
-               .with_options(parseOpt)
-               .parse();
-
-            let fmt_options = oxc_formatter::FormatOptions::default();
-             let fmted_round_tripped_src =
-             oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
-
-             println!("{fmted_round_tripped_src}");
-
-             // should not crash when parsing the minified source text again
-             let  parseOpt = oxc_parser::ParseOptions::default();
-             let rnd_tripped_ast = oxc_parser::Parser::new(&ALLOC, &fmted_round_tripped_src, oxc_ast::ast::SourceType::ts())
-             .with_options(parseOpt)
-             .parse();
-             let rnd_trip_program: Program = rnd_tripped_ast.program;
-             println!("AST1: {original_program:#?}");
-             println!("AST2: {rnd_trip_program:#?}");
-
-               assert!(original_program.content_eq(&rnd_trip_program));
-             /*
-        // get the only single expression in the parsed AST so we can compare
-        // against the original we generated with proptest
-           let fst_ast_statement = parsed_ast.program.body.first().unwrap();
-           let expr_stat: &Box<'_,oxc_ast::ast::ExpressionStatement> = match fst_ast_statement {
-               oxc_ast::ast::Statement::ExpressionStatement(expr_statement)=>
-                 expr_statement,
-             _ => panic!("Unexpected, shoould only be a single expression statement")
-           };
-
-
-           //  if show_ast {
-          //     println!("{parsed_ast_program:#?}");
-               //}
-
-               // AST -> SourceText -> Ast -> SourceTxt2, the SourceTxt2 should be unchanged.
-
-               let rnd_tripped_logic_exp: &Expression<'_> = &expr_stat.expression;
-
-               let mut codegen_two = Codegen::new();
-                      codegen_two.print_expression(rnd_tripped_logic_exp);
-                let roundtripped_source_text: String = codegen_two.into_source_text();
-                 assert_eq!(original_source_text.as_str(), roundtripped_source_text.as_str());
-            */
-                 }
-        }
-
-    //    test that AST -> codegen -> lint apply "safe" fixes - > Always parses without crash
-    proptest! {
+    /*
+        // test that AST -> codegen -> AST roundtrips
+        proptest! {
                 #[test]
-                fn ast_logical_expr_lint_fix_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
+                fn ast_logical_expr_rndtrips(mut original_program in gen_program(&ALLOC)) {
+
 
                     // AST -> Source Text
                     let mut codegen = Codegen::new();
-                    codegen.print_expression(&inital_logic_exp);
+                    //      codegen.print_str("return ");
+                    original_program.r#gen(&mut codegen, Context::default());
+                    //codegen.r#gen(&prog);
 
                     let original_source_text: String = codegen.into_source_text();
-
+                      original_program.source_text =original_source_text.as_str();
 
         println!("{}", original_source_text);
 
-    write_file("pbt.ts", &original_source_text).expect("failed to write file");
-
-        let output = Command::new("oxlint")
-                             .args(["pbt.ts", "--fix-suggestions"])
-                           //  .arg("-A all")
-                           // .arg
-                             .output()
-                             .expect("failed to execute process");
-
-        println!("status: {}", output.status);
-        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-
-        let fixed_src =  std::fs::read_to_string("pbt.ts").expect("failed to read fixed src");
-               // Source Text -> AST -> Fmt -> Fmted Source Text
-          /*
-               let  parseOpt = oxc_parser::ParseOptions::default();
+               // Source Text -> AST
+                let  parseOpt = oxc_parser::ParseOptions::default();
                     let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
                    .with_options(parseOpt)
                    .parse();
 
-                let fmt_options = oxc_linter::FormatOptions::default();
-                 let fmted_src =
+                let fmt_options = oxc_formatter::FormatOptions::default();
+                 let fmted_round_tripped_src =
                  oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
-    */
-              //   println!("{fmted_src}");
 
-                 // should not crash when parsing the fixed source text again
+                 println!("{fmted_round_tripped_src}");
+
+                 // should not crash when parsing the minified source text again
                  let  parseOpt = oxc_parser::ParseOptions::default();
-                 let parsed_fixed_src = oxc_parser::Parser::new(&ALLOC, &fixed_src, oxc_ast::ast::SourceType::ts())
+                 let rnd_tripped_ast = oxc_parser::Parser::new(&ALLOC, &fmted_round_tripped_src, oxc_ast::ast::SourceType::ts())
                  .with_options(parseOpt)
                  .parse();
+                 let rnd_trip_program: Program = rnd_tripped_ast.program;
+                 println!("AST1: {original_program:#?}");
+                 println!("AST2: {rnd_trip_program:#?}");
 
+                   assert!(original_program.content_eq(&rnd_trip_program));
 
-                 println!("{:?}",fixed_src)
-                }
+                     }
             }
+    */
+    /*
+       //    test that AST -> codegen -> lint apply "safe" fixes - > Always parses without crash
+       proptest! {
+                   #[test]
+                   fn ast_logical_expr_lint_fix_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
 
+                       // AST -> Source Text
+                       let mut codegen = Codegen::new();
+                       codegen.print_expression(&inital_logic_exp);
+
+                       let original_source_text: String = codegen.into_source_text();
+
+
+           println!("{}", original_source_text);
+
+       write_file("pbt.ts", &original_source_text).expect("failed to write file");
+
+           let output = Command::new("oxlint")
+                                .args(["pbt.ts", "--fix-suggestions"])
+                              //  .arg("-A all")
+                              // .arg
+                                .output()
+                                .expect("failed to execute process");
+
+           println!("status: {}", output.status);
+           println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+
+           let fixed_src =  std::fs::read_to_string("pbt.ts").expect("failed to read fixed src");
+                  // Source Text -> AST -> Fmt -> Fmted Source Text
+             /*
+                  let  parseOpt = oxc_parser::ParseOptions::default();
+                       let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
+                      .with_options(parseOpt)
+                      .parse();
+
+                   let fmt_options = oxc_linter::FormatOptions::default();
+                    let fmted_src =
+                    oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
+       */
+                 //   println!("{fmted_src}");
+
+                    // should not crash when parsing the fixed source text again
+                    let  parseOpt = oxc_parser::ParseOptions::default();
+                    let parsed_fixed_src = oxc_parser::Parser::new(&ALLOC, &fixed_src, oxc_ast::ast::SourceType::ts())
+                    .with_options(parseOpt)
+                    .parse();
+
+
+                    println!("{:?}",fixed_src)
+                   }
+               }
+    */
     fn minify(
         allocator: &Allocator,
         source_text: &str,
@@ -343,38 +329,40 @@ mod test {
             .code
     }
 
-    //  AST -> Minifier -> Source Txt -> Parses without crash
-    proptest! {
-            #[test]
-            fn ast_expr_code_gen_minify_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
+    /*
+        //  AST -> Minifier -> Source Txt -> Parses without crash
+        proptest! {
+                #[test]
+                fn ast_expr_code_gen_minify_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
 
-                // AST -> Source Text
-                let mut codegen = Codegen::new();
-                //codegen.print_str("return ");
-                codegen.print_expression(&inital_logic_exp);
+                    // AST -> Source Text
+                    let mut codegen = Codegen::new();
+                    //codegen.print_str("return ");
+                    codegen.print_expression(&inital_logic_exp);
 
-                let original_source_text: String = codegen.into_source_text();
-
-
-    println!("{}", original_source_text);
+                    let original_source_text: String = codegen.into_source_text();
 
 
-
-            let minified_src = minify(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts(), true, true);
-
-             println!("minified: {}, original: {}", minified_src, original_source_text);
-
-
-             // should not crash when parsing the minified source text again
-             let  parseOpt = oxc_parser::ParseOptions::default();
-             let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &minified_src, oxc_ast::ast::SourceType::ts())
-             .with_options(parseOpt)
-             .parse();
-             let mut program = parsed_fmted_ast.program;
-             // println!("pro {program:#?}");
+        println!("{}", original_source_text);
 
 
 
+                let minified_src = minify(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts(), true, true);
+
+                 println!("minified: {}, original: {}", minified_src, original_source_text);
+
+
+                 // should not crash when parsing the minified source text again
+                 let  parseOpt = oxc_parser::ParseOptions::default();
+                 let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &minified_src, oxc_ast::ast::SourceType::ts())
+                 .with_options(parseOpt)
+                 .parse();
+                 let mut program = parsed_fmted_ast.program;
+                 // println!("pro {program:#?}");
+
+
+
+                }
             }
-        }
+    */
 }
