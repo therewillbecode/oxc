@@ -1,13 +1,9 @@
-use oxc_ast::{NONE, ast::*};
-use oxc_ecmascript::side_effects::MayHaveSideEffects;
 use oxc_span::{ContentEq, GetSpan};
-use oxc_syntax::es_target::ESTarget;
 
 #[cfg(test)]
 mod test {
     use oxc_allocator::{Allocator, Box, IntoIn, Vec};
     use oxc_ast::ast::{BooleanLiteral, Expression, LogicalExpression, LogicalOperator};
-    //use oxc_codegen::{CodeGenerator, CodegenOptions};
     use oxc_codegen::{Codegen, CodegenOptions};
 
     use oxc_span::Span;
@@ -17,7 +13,6 @@ mod test {
     fn bool_lit_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'static>> {
         (proptest::bool::weighted(0.5)).prop_map(move |x| {
             let b = BooleanLiteral { span: Span::empty(0), value: x };
-            //let alloc = Allocator::default();
             Expression::BooleanLiteral(Box::new_in(b, &alloc))
         })
     }
@@ -29,8 +24,6 @@ mod test {
             bool_lit_strat(alloc),
         )
             .prop_map(|(op, l, r)| {
-                // let lb = BooleanLiteral { span: Span::empty(0), value: x };
-                // let rb = BooleanLiteral { span: Span::empty(0), value: y };
                 let left: Expression = l;
                 let right: Expression = r;
                 let operator: LogicalOperator = op;
@@ -93,18 +86,46 @@ mod test {
     // test that AST -> codegen -> AST roundtrips
     proptest! {
             #[test]
-            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
+            fn doesnt_crash(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
 
-              //  let alloc = Allocator::new(); // ugh no
-
-                //let ad = a.
-                //let mut program = ret.program;
+                // AST -> Source Text
                 let mut codegen = Codegen::new();
-                codegen.print_expression(&cond);
-                let s: String = codegen.into_source_text();
-    println!("{}", s);
+                codegen.print_expression(&inital_logic_exp);
 
-           assert_eq!(s.as_str(), s.as_str() );//"false || false");
+                let original_source_text: String = codegen.into_source_text();
+
+
+    println!("{}", original_source_text);
+
+           // Source Text -> AST
+            let  parseOpt = oxc_parser::ParseOptions::default();
+                let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
+               .with_options(parseOpt)
+               .parse();
+
+        // get the only single expression in the parsed AST so we can compare
+        // against the original we generated with proptest
+           let fst_ast_statement = parsed_ast.program.body.first().unwrap();
+           let expr_stat: &Box<'_,oxc_ast::ast::ExpressionStatement> = match fst_ast_statement {
+               oxc_ast::ast::Statement::ExpressionStatement(expr_statement)=>
+                 expr_statement,
+             _ => panic!("Unexpected, shoould only be a single expression statement")
+           };
+
+
+           //  if show_ast {
+            //   println!("AST:");
+          //     println!("{parsed_ast_program:#?}");
+               //}
+
+               // AST -> SourceText -> Ast -> SourceTxt2, the SourceTxt2 should be unchanged.
+
+               let rnd_tripped_logic_exp: &Expression<'_> = &expr_stat.expression;
+
+               let mut codegen_two = Codegen::new();
+                      codegen_two.print_expression(rnd_tripped_logic_exp);
+                let roundtripped_source_text: String = codegen_two.into_source_text();
+                 assert_eq!(original_source_text.as_str(), roundtripped_source_text.as_str());
             }
         }
 
