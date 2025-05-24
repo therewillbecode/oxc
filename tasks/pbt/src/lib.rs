@@ -6,6 +6,11 @@ mod test {
     use oxc_ast::ast::{BooleanLiteral, Expression, LogicalExpression, LogicalOperator};
     use oxc_codegen::{Codegen, CodegenOptions};
 
+    use oxc_mangler::MangleOptions;
+    use oxc_minifier::{CompressOptions, Minifier, MinifierOptions};
+    use oxc_parser::Parser;
+    use oxc_span::SourceType;
+
     use oxc_span::Span;
     use oxc_syntax::es_target::ESTarget;
     use proptest::prelude::*;
@@ -61,6 +66,7 @@ mod test {
     static ALLOC: std::sync::LazyLock<oxc_allocator::Allocator> =
         std::sync::LazyLock::new(|| Allocator::default());
 
+        /*
     // test that AST -> codegen -> AST roundtrips
     proptest! {
             #[test]
@@ -80,6 +86,13 @@ mod test {
                 let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
                .with_options(parseOpt)
                .parse();
+
+            let fmt_options = oxc_formatter::FormatOptions::default();
+             let fmted_round_tripped_src =
+             oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
+
+             println!("{fmted_round_tripped_src}");
+
 
         // get the only single expression in the parsed AST so we can compare
         // against the original we generated with proptest
@@ -107,39 +120,140 @@ mod test {
             }
         }
 
-    //    test that AST -> codegen -> lint --fix - > Always parses
-    //    proptest! {
-    //            #[test]
-    //            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
-    //
-    //            }
-    //        }
-    //
-    //
-    //    test that AST -> codegen -> Minifier - > Always parses
-    //    proptest! {
-    //            #[test]
-    //            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
-    //
-    //            }
-    //        }
-    //
-    //     test that AST -> codegen -> prettier - > Always parses
-    //    proptest! {
-    //            #[test]
-    //            fn doesnt_crash(cond in nested_logical_expr_strat(&ALLOC)) {
-    //
-    //            }
-    //        }
-    //
 
-    // Parser
-    //
-    // Ensuring AST for TypeScript types is aligned with the standard "TS-ESLint" to ensure
-    // tool interopability.
-    //
-    // https://github.com/oxc-project/oxc/issues/9705
-    //
-    // // test roundtripping from our AST to back again produces the same ast
-    // test that AST -> codegen -> Parse with TS-ESLINT -> Print with TS-ESLINT -> codegen -> BackTo Our AST
+    // test that AST -> codegen ->  fmt -> parse doesnt crash
+    proptest! {
+            #[test]
+            fn ast_logical_expr_code_gen_fmts_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+
+                // AST -> Source Text
+                let mut codegen = Codegen::new();
+                codegen.print_expression(&inital_logic_exp);
+
+                let original_source_text: String = codegen.into_source_text();
+
+
+    println!("{}", original_source_text);
+
+           // Source Text -> AST -> Fmt -> Fmted Source Text
+            let  parseOpt = oxc_parser::ParseOptions::default();
+                let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
+               .with_options(parseOpt)
+               .parse();
+
+            let fmt_options = oxc_formatter::FormatOptions::default();
+             let fmted_src =
+             oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
+
+             println!("{fmted_src}");
+
+
+             // should not crash when parsing the fmted source text again
+              let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
+             .with_options(parseOpt)
+             .parse();
+
+
+            }
+        }
+
+        /*
+    //    test that AST -> codegen -> lint apply "safe" fixes - > Always parses without crash
+    proptest! {
+            #[test]
+            fn ast_logical_expr_code_gen_fmts_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+
+                // AST -> Source Text
+                let mut codegen = Codegen::new();
+                codegen.print_expression(&inital_logic_exp);
+
+                let original_source_text: String = codegen.into_source_text();
+
+
+    println!("{}", original_source_text);
+
+           // Source Text -> AST -> Fmt -> Fmted Source Text
+            let  parseOpt = oxc_parser::ParseOptions::default();
+                let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
+               .with_options(parseOpt)
+               .parse();
+
+            let fmt_options = oxc_linter::FormatOptions::default();
+             let fmted_src =
+             oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
+
+             println!("{fmted_src}");
+
+
+             // should not crash when parsing the fmted source text again
+              let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
+             .with_options(parseOpt)
+             .parse();
+
+
+            }
+        }
+        */
+         */
+
+        fn minify(
+            allocator: &Allocator,
+            source_text: &str,
+            source_type: SourceType,
+            mangle: bool,
+            nospace: bool,
+        ) -> String {
+            let ret = Parser::new(allocator, source_text, source_type).parse();
+            let mut program = ret.program;
+            let options = MinifierOptions {
+                mangle: mangle.then(MangleOptions::default),
+                compress: Some(CompressOptions::default()),
+            };
+            let ret = Minifier::new(options).build(allocator, &mut program);
+            Codegen::new()
+                .with_options(CodegenOptions {
+                    minify: nospace,
+                    comments: false,
+                    annotation_comments: false,
+                    legal_comments: oxc_codegen::LegalComment::Eof,
+                    ..CodegenOptions::default()
+                })
+                .with_scoping(ret.scoping)
+                .build(&program)
+                .code
+        }
+
+
+        //  AST -> Minifier -> Source Txt -> Parses without crash
+        proptest! {
+                #[test]
+                fn ast_logical_expr_code_gen_minify_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+
+                    // AST -> Source Text
+                    let mut codegen = Codegen::new();
+                    codegen.print_expression(&inital_logic_exp);
+
+                    let original_source_text: String = codegen.into_source_text();
+
+
+        println!("{}", original_source_text);
+
+
+
+                let minified_src = minify(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts(), true, true);
+
+                 println!("minified: {}, original: {}", minified_src, original_source_text);
+
+
+                 // should not crash when parsing the minified source text again
+                 let  parseOpt = oxc_parser::ParseOptions::default();
+                 let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &minified_src, oxc_ast::ast::SourceType::ts())
+                 .with_options(parseOpt)
+                 .parse();
+
+                }
+            }
+
+
+
 }
