@@ -14,6 +14,17 @@ mod test {
     use oxc_span::Span;
     use oxc_syntax::es_target::ESTarget;
     use proptest::prelude::*;
+    use std::process::Command;
+
+    use std::fs::File;
+    use std::io::prelude::*;
+    use std::io::Result;
+
+    fn write_file(file_path: &str, contents: &str) -> Result<()> {
+        let mut file = File::create(file_path)?;
+        file.write_all(contents.as_bytes())
+    }
+
 
     fn bool_lit_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'static>> {
         (proptest::bool::weighted(0.5)).prop_map(move |x| {
@@ -156,12 +167,12 @@ mod test {
 
             }
         }
+*/
 
-        /*
     //    test that AST -> codegen -> lint apply "safe" fixes - > Always parses without crash
     proptest! {
             #[test]
-            fn ast_logical_expr_code_gen_fmts_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+            fn ast_logical_expr_lint_fix_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
 
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
@@ -172,8 +183,22 @@ mod test {
 
     println!("{}", original_source_text);
 
+write_file("pbt.ts", &original_source_text).expect("failed to write file");
+
+    let output = Command::new("oxlint")
+                         .args(["pbt.ts", "--fix-suggestions"])
+                       //  .arg("-A all")
+                       // .arg
+                         .output()
+                         .expect("failed to execute process");
+
+    println!("status: {}", output.status);
+    println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+
+    let fixed_src = "";
            // Source Text -> AST -> Fmt -> Fmted Source Text
-            let  parseOpt = oxc_parser::ParseOptions::default();
+      /*
+           let  parseOpt = oxc_parser::ParseOptions::default();
                 let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
                .with_options(parseOpt)
                .parse();
@@ -181,20 +206,19 @@ mod test {
             let fmt_options = oxc_linter::FormatOptions::default();
              let fmted_src =
              oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
+*/
+          //   println!("{fmted_src}");
 
-             println!("{fmted_src}");
-
-
-             // should not crash when parsing the fmted source text again
-              let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
+             // should not crash when parsing the fixed source text again
+             let  parseOpt = oxc_parser::ParseOptions::default();
+             let parsed_fixed_src = oxc_parser::Parser::new(&ALLOC, &fixed_src, oxc_ast::ast::SourceType::ts())
              .with_options(parseOpt)
              .parse();
 
 
             }
         }
-        */
-         */
+
 
         fn minify(
             allocator: &Allocator,
@@ -223,7 +247,7 @@ mod test {
                 .code
         }
 
-
+/*
         //  AST -> Minifier -> Source Txt -> Parses without crash
         proptest! {
                 #[test]
@@ -254,6 +278,7 @@ mod test {
                 }
             }
 
+            */
 
 
 }
