@@ -4,16 +4,16 @@ use oxc_span::{ContentEq, GetSpan};
 mod test {
     use oxc_allocator::{Allocator, Box, IntoIn, Vec};
     use oxc_ast::ast::{
-        Program, Statement,
-        BooleanLiteral, TSAsExpression, TSBooleanKeyword, TSType,TSTypeLiteral,ConditionalExpression, Expression, LogicalExpression, LogicalOperator,
-        ParenthesizedExpression, UnaryExpression, UnaryOperator,
+        BooleanLiteral, ConditionalExpression, Expression, ExpressionStatement, LogicalExpression,
+        LogicalOperator, ParenthesizedExpression, Program, Statement, TSAsExpression,
+        TSBooleanKeyword, TSType, TSTypeLiteral, UnaryExpression, UnaryOperator,
     };
-    use oxc_codegen::{Codegen, CodegenOptions};
+    use oxc_codegen::{Codegen, CodegenOptions, Context, Gen};
 
     use oxc_mangler::MangleOptions;
     use oxc_minifier::{CompressOptions, Minifier, MinifierOptions};
     use oxc_parser::Parser;
-    use oxc_span::{SourceType, ContentEq};
+    use oxc_span::{ContentEq, SourceType};
 
     use oxc_span::Span;
     use oxc_syntax::es_target::ESTarget;
@@ -30,28 +30,26 @@ mod test {
     }
 
     fn bool_lit_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'static>> {
-        (proptest::bool::weighted(0.5),proptest::bool::weighted(0.15)).prop_map(move |(x, cast_as)| {
-            let b = BooleanLiteral { span: Span::empty(0), value: x };
+        (proptest::bool::weighted(0.5), proptest::bool::weighted(0.15)).prop_map(
+            move |(x, cast_as)| {
+                let b = BooleanLiteral { span: Span::empty(0), value: x };
 
-
-            if cast_as {
-                let inner = Expression::BooleanLiteral(Box::new_in(b, &alloc));
-                let a = TSAsExpression{
-                     expression: inner,
-                      span:   Span::empty(0),
-                     type_annotation:
-                        TSType::TSBooleanKeyword(
-                            Box::new_in(TSBooleanKeyword{span: Span::empty(0)}
-                    ,&alloc
-                            )
-                        )
-
-                };
-               Expression::TSAsExpression(Box::new_in(a,  &alloc))
-            } else {
-                Expression::BooleanLiteral(Box::new_in(b, &alloc))
-            }
-        })
+                if cast_as {
+                    let inner = Expression::BooleanLiteral(Box::new_in(b, &alloc));
+                    let a = TSAsExpression {
+                        expression: inner,
+                        span: Span::empty(0),
+                        type_annotation: TSType::TSBooleanKeyword(Box::new_in(
+                            TSBooleanKeyword { span: Span::empty(0) },
+                            &alloc,
+                        )),
+                    };
+                    Expression::TSAsExpression(Box::new_in(a, &alloc))
+                } else {
+                    Expression::BooleanLiteral(Box::new_in(b, &alloc))
+                }
+            },
+        )
     }
 
     fn logical_expr_strat(alloc: &Allocator) -> impl Strategy<Value = Expression<'_>> {
@@ -80,23 +78,6 @@ mod test {
                         alloc,
                     ))
                 }
-            })
-    }
-
-    fn conditional_expr(alloc: &'static Allocator) -> impl Strategy<Value = Expression<'static>> {
-        (
-            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
-            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
-            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
-        )
-            .prop_map(|(l, r, t)| {
-                let test: Expression = t;
-                let alternate: Expression = l;
-                let consequent: Expression = r;
-                let span: Span = Span::empty(0);
-                let cond = ConditionalExpression { test, alternate, consequent, span };
-
-                Expression::ConditionalExpression(Box::new_in(cond, alloc))
             })
     }
 
@@ -130,6 +111,51 @@ mod test {
                 )
             },
         )
+    }
+
+    fn conditional_expr(alloc: &'static Allocator) -> impl Strategy<Value = Expression<'static>> {
+        (
+            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
+            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
+            prop_oneof![bool_lit_strat(alloc), nested_logical_expr_strat(alloc)],
+        )
+            .prop_map(|(l, r, t)| {
+                let test: Expression = t;
+                let alternate: Expression = l;
+                let consequent: Expression = r;
+                let span: Span = Span::empty(0);
+                let cond = ConditionalExpression { test, alternate, consequent, span };
+
+                Expression::ConditionalExpression(Box::new_in(cond, alloc))
+            })
+    }
+
+    fn gen_expr_statement(alloc: &'static Allocator) -> impl Strategy<Value = Statement<'static>> {
+        (prop_oneof![conditional_expr(alloc)]).prop_map(|expr| {
+            let ex = ExpressionStatement { span: Span::empty(0), expression: expr };
+            Statement::ExpressionStatement(Box::new_in(ex, alloc))
+        })
+    }
+
+    fn gen_program(alloc: &'static Allocator) -> impl Strategy<Value = Program<'static>> {
+        (prop_oneof![gen_expr_statement(alloc)]).prop_map(|expr| {
+            let mut body: Vec<'_, Statement> = Vec::new_in(&ALLOC);
+
+            body.push(expr);
+
+            let init_program: Program = Program {
+                span: Span::empty(0),
+                comments: Vec::new_in(&ALLOC),
+                directives: Vec::new_in(&ALLOC),
+                body: body.into_in(&ALLOC),
+                hashbang: None,
+                source_text: "",
+                source_type: oxc_ast::ast::SourceType::ts(),
+                scope_id: Default::default(),
+            };
+
+            return init_program;
+        })
     }
 
     // test that AST -> codegen ->  fmt -> parse doesnt crash
@@ -176,24 +202,14 @@ mod test {
     // test that AST -> codegen -> AST roundtrips
     proptest! {
             #[test]
-            fn ast_logical_expr_rndtrips(inital_logic_exp in conditional_expr(&ALLOC)) {
+            fn ast_logical_expr_rndtrips(prog in gen_program(&ALLOC)) {
 
-                let body : Vec<'_, Statement> = Vec::new_in(&ALLOC);
-                let init_program: Program = Program {
-                    span: Span::empty(0),
-                   comments: Vec::new_in(&ALLOC),//oxc_allocator::Vec<'_, Comment>::new(),
-                   directives:Vec::new_in(&ALLOC),
-                   body:body.into_in(&ALLOC),
-                   hashbang: None,
-                   source_text: "",
-                   source_type: oxc_ast::ast::SourceType::ts(),
-                   scope_id: Default::default(),
-                };
+
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
                 //      codegen.print_str("return ");
-
-                codegen.print_expression(&inital_logic_exp);
+                prog.r#gen(&mut codegen, Context::default());
+                //codegen.r#gen(&prog);
 
                 let original_source_text: String = codegen.into_source_text();
 
