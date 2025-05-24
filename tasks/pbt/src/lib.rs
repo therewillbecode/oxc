@@ -4,6 +4,7 @@ use oxc_span::{ContentEq, GetSpan};
 mod test {
     use oxc_allocator::{Allocator, Box, IntoIn, Vec};
     use oxc_ast::ast::{
+        Program, Statement,
         BooleanLiteral, TSAsExpression, TSBooleanKeyword, TSType,TSTypeLiteral,ConditionalExpression, Expression, LogicalExpression, LogicalOperator,
         ParenthesizedExpression, UnaryExpression, UnaryOperator,
     };
@@ -12,7 +13,7 @@ mod test {
     use oxc_mangler::MangleOptions;
     use oxc_minifier::{CompressOptions, Minifier, MinifierOptions};
     use oxc_parser::Parser;
-    use oxc_span::SourceType;
+    use oxc_span::{SourceType, ContentEq};
 
     use oxc_span::Span;
     use oxc_syntax::es_target::ESTarget;
@@ -138,7 +139,7 @@ mod test {
 
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
-                codegen.print_str("return ");
+                //   codegen.print_str("return ");
 
                 codegen.print_expression(&inital_logic_exp);
 
@@ -166,7 +167,6 @@ mod test {
              .with_options(parseOpt)
              .parse();
 
-
             }
         }
 
@@ -178,9 +178,20 @@ mod test {
             #[test]
             fn ast_logical_expr_rndtrips(inital_logic_exp in conditional_expr(&ALLOC)) {
 
+                let body : Vec<'_, Statement> = Vec::new_in(&ALLOC);
+                let init_program: Program = Program {
+                    span: Span::empty(0),
+                   comments: Vec::new_in(&ALLOC),//oxc_allocator::Vec<'_, Comment>::new(),
+                   directives:Vec::new_in(&ALLOC),
+                   body:body.into_in(&ALLOC),
+                   hashbang: None,
+                   source_text: "",
+                   source_type: oxc_ast::ast::SourceType::ts(),
+                   scope_id: Default::default(),
+                };
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
-                codegen.print_str("return ");
+                //      codegen.print_str("return ");
 
                 codegen.print_expression(&inital_logic_exp);
 
@@ -201,6 +212,13 @@ mod test {
 
              println!("{fmted_round_tripped_src}");
 
+             // should not crash when parsing the minified source text again
+             let  parseOpt = oxc_parser::ParseOptions::default();
+             let rnd_tripped_ast = oxc_parser::Parser::new(&ALLOC, &fmted_round_tripped_src, oxc_ast::ast::SourceType::ts())
+             .with_options(parseOpt)
+             .parse();
+             let program: Program = rnd_tripped_ast.program;
+               assert!(program.content_eq(&program));
              /*
         // get the only single expression in the parsed AST so we can compare
         // against the original we generated with proptest
@@ -314,7 +332,7 @@ mod test {
 
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
-                codegen.print_str("return ");
+                //codegen.print_str("return ");
                 codegen.print_expression(&inital_logic_exp);
 
                 let original_source_text: String = codegen.into_source_text();
