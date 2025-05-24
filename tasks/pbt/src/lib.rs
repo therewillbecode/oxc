@@ -189,12 +189,12 @@ mod test {
         }
 
 
-
+*/
 
     //    test that AST -> codegen -> lint apply "safe" fixes - > Always parses without crash
     proptest! {
             #[test]
-            fn ast_logical_expr_lint_fix_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+            fn ast_logical_expr_lint_fix_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
 
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
@@ -276,11 +276,11 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
         //  AST -> Minifier -> Source Txt -> Parses without crash
         proptest! {
                 #[test]
-                fn ast_logical_expr_code_gen_minify_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+                fn ast_expr_code_gen_minify_parses_again(inital_logic_exp in conditional_expr(&ALLOC)) {
 
                     // AST -> Source Text
                     let mut codegen = Codegen::new();
-                    //codegen.print_str("return ");
+                    codegen.print_str("return ");
                     codegen.print_expression(&inital_logic_exp);
 
                     let original_source_text: String = codegen.into_source_text();
@@ -307,7 +307,7 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
 
                 }
             }
-                 */
+
 
 
 }
