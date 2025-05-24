@@ -3,7 +3,7 @@ use oxc_span::{ContentEq, GetSpan};
 #[cfg(test)]
 mod test {
     use oxc_allocator::{Allocator, Box, IntoIn, Vec};
-    use oxc_ast::ast::{BooleanLiteral, Expression,ConditionalExpression, LogicalExpression, LogicalOperator};
+    use oxc_ast::ast::{BooleanLiteral, UnaryExpression,UnaryOperator, ParenthesizedExpression, Expression,ConditionalExpression, LogicalExpression, LogicalOperator};
     use oxc_codegen::{Codegen, CodegenOptions};
 
     use oxc_mangler::MangleOptions;
@@ -38,15 +38,25 @@ mod test {
             prop_oneof![Just(LogicalOperator::Or), Just(LogicalOperator::And),],
             bool_lit_strat(alloc),
             bool_lit_strat(alloc),
+            proptest::bool::weighted(0.25)
         )
-            .prop_map(|(op, l, r)| {
+            .prop_map(|(op, l, r, is_negated)| {
                 let left: Expression = l;
                 let right: Expression = r;
                 let operator: LogicalOperator = op;
                 let span: Span = Span::empty(0);
                 let a = LogicalExpression { left, right, operator, span };
 
-                Expression::LogicalExpression(Box::new_in(a, alloc))
+                if !is_negated {
+                    Expression::LogicalExpression(Box::new_in(a, alloc))
+                } else {
+                    Expression::UnaryExpression(Box::new_in(UnaryExpression {
+                         span: Span::empty(0),
+                         operator: UnaryOperator::LogicalNot,
+                         argument:  Expression::LogicalExpression(Box::new_in(a, alloc))
+
+                    }, alloc))
+                }
             })
     }
 
@@ -72,8 +82,8 @@ mod test {
     ) -> impl Strategy<Value = Expression<'static>> {
         let leaf = prop_oneof![bool_lit_strat(alloc)];
         leaf.prop_recursive(
-            8,  // 3 levels deep
-            20, // Shoot for maximum size of 16 nodes
+            40,  // 3 levels deep
+            30, // Shoot for maximum size of 16 nodes
             2,  // We put up to 3 items per collection
             move |inner| {
                 (logical_expr_strat(alloc), inner).prop_map(move |(logical_exp, inner_exp)| {
@@ -134,11 +144,11 @@ mod test {
     static ALLOC: std::sync::LazyLock<oxc_allocator::Allocator> =
         std::sync::LazyLock::new(|| Allocator::default());
 
-        /*
+
     // test that AST -> codegen -> AST roundtrips
     proptest! {
             #[test]
-            fn ast_logical_expr_rndtrips(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+            fn ast_logical_expr_rndtrips(inital_logic_exp in conditional_expr(&ALLOC)) {
 
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
@@ -189,7 +199,7 @@ mod test {
         }
 
 
-*/
+
 
     //    test that AST -> codegen -> lint apply "safe" fixes - > Always parses without crash
     proptest! {
