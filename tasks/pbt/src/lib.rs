@@ -3,7 +3,7 @@ use oxc_span::{ContentEq, GetSpan};
 #[cfg(test)]
 mod test {
     use oxc_allocator::{Allocator, Box, IntoIn, Vec};
-    use oxc_ast::ast::{BooleanLiteral, Expression, LogicalExpression, LogicalOperator};
+    use oxc_ast::ast::{BooleanLiteral, Expression,ConditionalExpression, LogicalExpression, LogicalOperator};
     use oxc_codegen::{Codegen, CodegenOptions};
 
     use oxc_mangler::MangleOptions;
@@ -50,14 +50,31 @@ mod test {
             })
     }
 
+    fn conditional_expr(alloc: &Allocator) -> impl Strategy<Value = Expression<'_>> {
+        (
+            logical_expr_strat(alloc),
+            logical_expr_strat(alloc),
+            logical_expr_strat(alloc),
+        )
+            .prop_map(|(l, r, t)| {
+                let test: Expression = t;
+                let alternate: Expression = l;
+                let consequent: Expression = r;
+                let span: Span = Span::empty(0);
+                let cond = ConditionalExpression { test, alternate, consequent, span };
+
+                Expression::ConditionalExpression(Box::new_in(cond, alloc))
+            })
+    }
+
     fn nested_logical_expr_strat(
         alloc: &'static Allocator,
     ) -> impl Strategy<Value = Expression<'static>> {
         let leaf = prop_oneof![bool_lit_strat(alloc)];
         leaf.prop_recursive(
-            4,  // 3 levels deep
+            8,  // 3 levels deep
             20, // Shoot for maximum size of 16 nodes
-            4,  // We put up to 3 items per collection
+            2,  // We put up to 3 items per collection
             move |inner| {
                 (logical_expr_strat(alloc), inner).prop_map(move |(logical_exp, inner_exp)| {
                     Expression::LogicalExpression(Box::new_in(
@@ -73,6 +90,46 @@ mod test {
             },
         )
     }
+
+
+
+    // test that AST -> codegen ->  fmt -> parse doesnt crash
+        proptest! {
+                #[test]
+                fn ast_logical_expr_code_gen_fmts_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
+
+                    // AST -> Source Text
+                    let mut codegen = Codegen::new();
+
+                    codegen.print_expression(&inital_logic_exp);
+
+
+                    let original_source_text: String = codegen.into_source_text();
+
+
+        println!("{}", original_source_text);
+
+               // Source Text -> AST -> Fmt -> Fmted Source Text
+                let  parseOpt = oxc_parser::ParseOptions::default();
+                    let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
+                   .with_options(parseOpt)
+                   .parse();
+
+                let fmt_options = oxc_formatter::FormatOptions::default();
+                 let fmted_src =
+                 oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
+
+                 println!("{fmted_src}");
+
+
+                 // should not crash when parsing the fmted source text again
+                  let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
+                 .with_options(parseOpt)
+                 .parse();
+
+
+                }
+            }
 
     static ALLOC: std::sync::LazyLock<oxc_allocator::Allocator> =
         std::sync::LazyLock::new(|| Allocator::default());
@@ -132,42 +189,7 @@ mod test {
         }
 
 
-    // test that AST -> codegen ->  fmt -> parse doesnt crash
-    proptest! {
-            #[test]
-            fn ast_logical_expr_code_gen_fmts_parses_again(inital_logic_exp in nested_logical_expr_strat(&ALLOC)) {
 
-                // AST -> Source Text
-                let mut codegen = Codegen::new();
-                codegen.print_expression(&inital_logic_exp);
-
-                let original_source_text: String = codegen.into_source_text();
-
-
-    println!("{}", original_source_text);
-
-           // Source Text -> AST -> Fmt -> Fmted Source Text
-            let  parseOpt = oxc_parser::ParseOptions::default();
-                let parsed_ast = oxc_parser::Parser::new(&ALLOC, &original_source_text, oxc_ast::ast::SourceType::ts())
-               .with_options(parseOpt)
-               .parse();
-
-            let fmt_options = oxc_formatter::FormatOptions::default();
-             let fmted_src =
-             oxc_formatter::Formatter::new(&ALLOC, fmt_options).build(&parsed_ast.program);
-
-             println!("{fmted_src}");
-
-
-             // should not crash when parsing the fmted source text again
-              let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &fmted_src, oxc_ast::ast::SourceType::ts())
-             .with_options(parseOpt)
-             .parse();
-
-
-            }
-        }
-*/
 
     //    test that AST -> codegen -> lint apply "safe" fixes - > Always parses without crash
     proptest! {
@@ -195,7 +217,7 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
     println!("status: {}", output.status);
     println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
 
-    let fixed_src = "";
+    let fixed_src =  std::fs::read_to_string("pbt.ts").expect("failed to read fixed src");
            // Source Text -> AST -> Fmt -> Fmted Source Text
       /*
            let  parseOpt = oxc_parser::ParseOptions::default();
@@ -216,8 +238,11 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
              .parse();
 
 
+             println!("{:?}",fixed_src)
             }
         }
+
+        */
 
 
         fn minify(
@@ -247,7 +272,7 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
                 .code
         }
 
-/*
+
         //  AST -> Minifier -> Source Txt -> Parses without crash
         proptest! {
                 #[test]
@@ -255,6 +280,7 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
 
                     // AST -> Source Text
                     let mut codegen = Codegen::new();
+                    //codegen.print_str("return ");
                     codegen.print_expression(&inital_logic_exp);
 
                     let original_source_text: String = codegen.into_source_text();
@@ -274,11 +300,13 @@ write_file("pbt.ts", &original_source_text).expect("failed to write file");
                  let parsed_fmted_ast = oxc_parser::Parser::new(&ALLOC, &minified_src, oxc_ast::ast::SourceType::ts())
                  .with_options(parseOpt)
                  .parse();
+          //       let mut program = parsed_fmted_ast.program;
+           //      println!("{program:#?}");
+
+
 
                 }
             }
-
-            */
 
 
 }
