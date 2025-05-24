@@ -1,1 +1,1 @@
-!(true as boolean && true) || !(false && false) && false ? !(false && true) || !(true && false) || false : !(true || false) && (true && false || false)
+true as boolean && true && (!(false || false as boolean) || true) ? false : false as boolean

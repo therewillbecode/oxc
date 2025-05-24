@@ -202,17 +202,17 @@ mod test {
     // test that AST -> codegen -> AST roundtrips
     proptest! {
             #[test]
-            fn ast_logical_expr_rndtrips(prog in gen_program(&ALLOC)) {
+            fn ast_logical_expr_rndtrips(mut original_program in gen_program(&ALLOC)) {
 
 
                 // AST -> Source Text
                 let mut codegen = Codegen::new();
                 //      codegen.print_str("return ");
-                prog.r#gen(&mut codegen, Context::default());
+                original_program.r#gen(&mut codegen, Context::default());
                 //codegen.r#gen(&prog);
 
                 let original_source_text: String = codegen.into_source_text();
-
+                  original_program.source_text =original_source_text.as_str();
 
     println!("{}", original_source_text);
 
@@ -233,8 +233,11 @@ mod test {
              let rnd_tripped_ast = oxc_parser::Parser::new(&ALLOC, &fmted_round_tripped_src, oxc_ast::ast::SourceType::ts())
              .with_options(parseOpt)
              .parse();
-             let program: Program = rnd_tripped_ast.program;
-               assert!(program.content_eq(&program));
+             let rnd_trip_program: Program = rnd_tripped_ast.program;
+             println!("AST1: {original_program:#?}");
+             println!("AST2: {rnd_trip_program:#?}");
+
+               assert!(original_program.content_eq(&rnd_trip_program));
              /*
         // get the only single expression in the parsed AST so we can compare
         // against the original we generated with proptest
@@ -247,7 +250,6 @@ mod test {
 
 
            //  if show_ast {
-            //   println!("AST:");
           //     println!("{parsed_ast_program:#?}");
                //}
 
