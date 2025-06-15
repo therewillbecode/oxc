@@ -2098,9 +2098,7 @@ impl<'a> SemanticBuilder<'a> {
             AstKind::TSTypeName(_) => {
                 self.current_reference_flags -= ReferenceFlags::Type;
             }
-            AstKind::TSTypeQuery(_)
-            // Clear the reference flags that are set in AstKind::PropertySignature
-            | AstKind::PropertyKey(_) => {
+            AstKind::TSTypeQuery(_) => {
                 self.current_reference_flags = ReferenceFlags::empty();
             }
             AstKind::LabeledStatement(_) => self.unused_labels.mark_unused(self.current_node_id),

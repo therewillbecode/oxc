@@ -38,7 +38,6 @@ pub enum AstNodes<'a> {
     Elision(&'a AstNode<'a, Elision>),
     ObjectExpression(&'a AstNode<'a, ObjectExpression<'a>>),
     ObjectProperty(&'a AstNode<'a, ObjectProperty<'a>>),
-    PropertyKey(&'a AstNode<'a, PropertyKey<'a>>),
     TemplateLiteral(&'a AstNode<'a, TemplateLiteral<'a>>),
     TaggedTemplateExpression(&'a AstNode<'a, TaggedTemplateExpression<'a>>),
     MemberExpression(&'a AstNode<'a, MemberExpression<'a>>),
@@ -215,7 +214,6 @@ impl<'a> AstNodes<'a> {
             Self::Elision(n) => n.span(),
             Self::ObjectExpression(n) => n.span(),
             Self::ObjectProperty(n) => n.span(),
-            Self::PropertyKey(n) => n.span(),
             Self::TemplateLiteral(n) => n.span(),
             Self::TaggedTemplateExpression(n) => n.span(),
             Self::MemberExpression(n) => n.span(),
@@ -392,7 +390,6 @@ impl<'a> AstNodes<'a> {
             Self::Elision(n) => n.parent,
             Self::ObjectExpression(n) => n.parent,
             Self::ObjectProperty(n) => n.parent,
-            Self::PropertyKey(n) => n.parent,
             Self::TemplateLiteral(n) => n.parent,
             Self::TaggedTemplateExpression(n) => n.parent,
             Self::MemberExpression(n) => n.parent,
@@ -569,7 +566,6 @@ impl<'a> AstNodes<'a> {
             Self::Elision(_) => "Elision",
             Self::ObjectExpression(_) => "ObjectExpression",
             Self::ObjectProperty(_) => "ObjectProperty",
-            Self::PropertyKey(_) => "PropertyKey",
             Self::TemplateLiteral(_) => "TemplateLiteral",
             Self::TaggedTemplateExpression(_) => "TaggedTemplateExpression",
             Self::MemberExpression(_) => "MemberExpression",
@@ -1376,7 +1372,7 @@ impl<'a> AstNode<'a, ObjectProperty<'a>> {
 impl<'a> AstNode<'a, PropertyKey<'a>> {
     #[inline]
     pub fn as_ast_nodes(&self) -> &AstNodes<'a> {
-        let parent = self.allocator.alloc(AstNodes::PropertyKey(transmute_self(self)));
+        let parent = self.parent;
         let node = match self.inner {
             PropertyKey::StaticIdentifier(s) => {
                 AstNodes::IdentifierName(self.allocator.alloc(AstNode {
