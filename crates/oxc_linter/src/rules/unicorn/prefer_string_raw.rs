@@ -104,6 +104,7 @@ impl Rule for PreferStringRaw {
                         return;
                     }
                 }
+                /*
                 AstKind::PropertyKey(_) => {
                     if let Some(AstKind::ObjectProperty(prop)) =
                         ctx.nodes().parent_node(parent_node.id()).map(AstNode::kind)
@@ -117,6 +118,7 @@ impl Rule for PreferStringRaw {
                         }
                     }
                 }
+                    */
                 AstKind::JSXAttribute(attr) => {
                     let Some(JSXAttributeValue::StringLiteral(value)) = &attr.value else {
                         return;
